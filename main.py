@@ -110,7 +110,7 @@ def handle_channel_created(event_data):
 
 
 def main():
-    _logger.info("Starting server at %d", PORT)
+    _logger.info("Starting server at %s", PORT)
     _logger.info("Listening for channels created with any of these prefixes: %s", CHANNEL_PREFIXES)
     slack_events_adapter.start(port=PORT, debug=DEBUG)
 
