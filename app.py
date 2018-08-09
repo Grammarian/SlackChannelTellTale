@@ -1,6 +1,5 @@
 import os
 import logging
-import pprint
 
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
@@ -69,18 +68,18 @@ def handle_channel_created(event_data):
     # Fetch the full info about the channel
     channel_info = slack_client.api_call("channels.info", channel=channel["id"])    
     if not channel_info or not channel_info.get("ok"):
-        _logger.error("ignored... fetching of channel failed: %s", pprint.pformat(channel_info))
+        _logger.error("ignored... fetching of channel failed: %s", repr(channel_info))
         return
 
     # Fetch the full info about the creator of the channel
     creator_info = slack_client.api_call("users.info", user=channel["creator"])
     if not creator_info or not creator_info.get("ok"):
-        _logger.error("ignored... fetching of creator failed: %s", pprint.pformat(creator_info))
+        _logger.error("ignored... fetching of creator failed: %s", repr(creator_info))
         return
 
     # Log for debugging if needed
-    # _logger.info("channel_info: %s", pprint.pformat(channel_info))
-    # _logger.info("creator_info: %s", pprint.pformat(creator_info))
+    _logger.info("channel_info: %s", repr(channel_info))
+    _logger.info("creator_info: %s", repr(creator_info))
 
     # Make a nicely format notification
     creater_id = nested_get(creator_info, "user", "id")
