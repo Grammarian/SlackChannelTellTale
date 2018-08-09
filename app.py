@@ -18,7 +18,7 @@ SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 
 # Initialize logging
-FORMAT = '%(asctime)s | %(name)s | %(levelname)s | %(thread)d | %(message)s'
+FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.INFO)
 _logger = logging.getLogger("ChannelTellTale")
  
@@ -27,7 +27,11 @@ slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/event
 app = slack_events_adapter.server
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 
+# Persistent -- sort of
+# The hosting app can restart the service any time it likes, so these will be lost.
+# We should store this information in Redis, but let's get it working first
 event_count = 0
+already_seen = {}
 
 
 def nested_get(d, *keys):
@@ -40,6 +44,53 @@ def nested_get(d, *keys):
         else:
             return None
     return d
+
+
+def remember_channel(channel):
+    """
+    Remember the given channel. Return a bool indicating if we've already seen it
+    """
+    channel_id = channel["id"]
+    if channel_id in already_seen:
+        return True
+    already_seen[channel_id] = channel.get("created")
+    return False
+
+
+def get_channel_info(channel_id):
+    """
+    Fetch information about the given channel from slack
+    """
+    channel_info = slack_client.api_call("channels.info", channel=channel_id)    
+    if channel_info and channel_info.get("ok"):
+        return channel_info
+
+    _logger.error("fetching of channel %s failed: %s", channel_id, repr(channel_info))
+    return None
+
+
+def insistent_get_channel_info(channel_id):
+    """
+    Repeatedly attempt to fetch information about the given channel from slack
+
+    We particularly want the purpose of the channel, but Slack sometimes separates
+    the creation of the channel from the setting of the purpose, so we have to do
+    a little waiting dance. It could be that the channel was created without a 
+    purpose, so don't try too hard
+    """
+    channel_info = get_channel_info(channel_id) 
+    if not channel_info:
+        return None
+    attempts = 0
+    while attempts < 3 and not nested_get(channel_info, "channel", "purpose", "value"):
+        attempts += 1
+        _logger.info("attempt %d: waiting for channel %s to find its purpose in life", attempts, channel_id)
+        time.sleep(1) 
+        channel_info = get_channel_info(channel_id) 
+        if not channel_info:
+            return None
+
+    return channel_info
 
 
 @slack_events_adapter.on("channel_created")
@@ -66,18 +117,20 @@ def handle_channel_created(event_data):
         _logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
         return
 
+    # Have we received an creation event about this channel before?
+    if remember_channel(channel):
+        _logger.info("ignored... we've already processed this channel: %s", channel_name)
+        return
+
     # Fetch the full info about the creator of the channel
     creator_info = slack_client.api_call("users.info", user=channel["creator"])
     if not creator_info or not creator_info.get("ok"):
         _logger.error("ignored... fetching of creator failed: %s", repr(creator_info))
         return
 
-    time.sleep(1) # Slack sometimes takes a little time to commit the details changes
-
-    # Fetch the full info about the channel
-    channel_info = slack_client.api_call("channels.info", channel=channel["id"])    
-    if not channel_info or not channel_info.get("ok"):
-        _logger.error("ignored... fetching of channel failed: %s", repr(channel_info))
+    # Try hard to fetch the full info about the channel
+    channel_info = insistent_get_channel_info(channel["id"]) 
+    if not channel_info:
         return
 
     # Log for debugging if needed
