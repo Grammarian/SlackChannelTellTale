@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
@@ -65,16 +66,18 @@ def handle_channel_created(event_data):
         _logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
         return
 
-    # Fetch the full info about the channel
-    channel_info = slack_client.api_call("channels.info", channel=channel["id"])    
-    if not channel_info or not channel_info.get("ok"):
-        _logger.error("ignored... fetching of channel failed: %s", repr(channel_info))
-        return
-
     # Fetch the full info about the creator of the channel
     creator_info = slack_client.api_call("users.info", user=channel["creator"])
     if not creator_info or not creator_info.get("ok"):
         _logger.error("ignored... fetching of creator failed: %s", repr(creator_info))
+        return
+
+    time.sleep(1) # Slack sometimes takes a little time to commit the details changes
+
+    # Fetch the full info about the channel
+    channel_info = slack_client.api_call("channels.info", channel=channel["id"])    
+    if not channel_info or not channel_info.get("ok"):
+        _logger.error("ignored... fetching of channel failed: %s", repr(channel_info))
         return
 
     # Log for debugging if needed
