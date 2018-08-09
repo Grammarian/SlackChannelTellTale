@@ -24,6 +24,7 @@ _logger = logging.getLogger("ChannelTellTale")
  
 # Initialize our slack interfaces
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events")
+app = slack_events_adapter.server
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 
 event_count = 0
