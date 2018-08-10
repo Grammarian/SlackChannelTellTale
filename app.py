@@ -1,7 +1,9 @@
 import os
 import logging
+import random
 import time
 
+from flask import Flask
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 
@@ -19,18 +21,21 @@ TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
-logging.basicConfig(format=FORMAT, level=logging.INFO)
+logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
 _logger = logging.getLogger("ChannelTellTale")
  
+# Initialize our web server and slack interfaces
+app = Flask(__name__)
+
 # Initialize our slack interfaces
-slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events")
-app = slack_events_adapter.server
+slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 
-# Persistent -- sort of
-# The hosting app can restart the service any time it likes, so these will be lost.
-# We should store this information in Redis, but let's get it working first
-event_count = 0
+# Persistent variables -- sort of
+# The hosting site can shutdown the service any time it likes, so these will be lost.
+# We could store this information in Redis, but that might be overkill. It just so
+# happens that all events are likely to happen about the same time, so it's probably
+# that keeping this in memory will work just fine without redis.
 already_seen = {}
 
 
@@ -98,9 +103,7 @@ def handle_channel_created(event_data):
     """
     Event callback when a new channel is created
     """
-    global event_count
-    event_count += 1
-    _logger.info("received event (%d): %s", event_count, repr(event_data))
+    _logger.info("received event: %s", repr(event_data))
 
     # Make sure the event structure is sensible
     channel = nested_get(event_data, "event", "channel")
@@ -152,7 +155,7 @@ def handle_channel_created(event_data):
     )
     fancy_message = {
         "fallback": message,
-        "color": COLORS[event_count % len(COLORS)],
+        "color": random.choice(COLORS),
         "pretext": "A new channel has been created :tada:",
         "author_name": "%s <@%s>" % (creater_name, creater_id),
         "author_icon": creater_image,
@@ -165,10 +168,16 @@ def handle_channel_created(event_data):
     slack_client.api_call("chat.postMessage", channel=TARGET_CHANNEL_ID, attachments=[fancy_message])
 
 
+# Test route: http://localhost:3000/ping
+@app.route("/ping")
+def ping_handler():
+    return "pong"
+
+
 def main():
     _logger.info("Starting server at %s", PORT)
     _logger.info("Listening for channels created with any of these prefixes: %s", CHANNEL_PREFIXES)
-    slack_events_adapter.start(port=PORT, debug=DEBUG)
+    app.run(port=PORT, debug=DEBUG)
 
 if __name__ == "__main__":
     main()
