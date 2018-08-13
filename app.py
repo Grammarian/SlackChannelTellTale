@@ -8,7 +8,6 @@ from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 
 # Constants
-#CHANNEL_PREFIXES = ["api-, bi-, bug-, dat, dev-, ftr-, im-, prj-, scrum, tf-, tpc-, jpp-"]
 MESSAGE = "*%s* just created a new channel :tada:\n<#%s|%s>\nIts purpose is: %s"
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00" ]
 
