@@ -24,6 +24,13 @@ FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(
 logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
 _logger = logging.getLogger("ChannelTellTale")
  
+# Log some settings
+_logger.info("STARTING")
+_logger.info("DEBUG: %s", DEBUG)
+_logger.info("PORT: %s", PORT)
+_logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
+_logger.info("TARGET_CHANNEL_ID: %s", TARGET_CHANNEL_ID)
+
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
 
@@ -175,7 +182,6 @@ def ping_handler():
 
 def main():
     _logger.info("Starting server at %s", PORT)
-    _logger.info("Listening for channels created with any of these prefixes: %s", CHANNEL_PREFIXES)
     app.run(port=PORT, debug=DEBUG)
 
 if __name__ == "__main__":
