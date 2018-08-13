@@ -5,13 +5,15 @@ what people are discussing, let alone to keep up.
 
 This app at least lets people know what new discussions are being created.
 
+When a new channel is created, this app will send a notification to a configured channel:
+
+![New channel notification](/images/sshot-notification.png?raw=true "New Channel Notification")
+
 # Hosting
 
-This app can be run locally, via ngrok. 
+This app can be run locally, via ngrok. But, more normally, it would be hosted somewhere: heroku, zeit, aws, GCE. 
 
-More normally, it would be hosted somewhere: heroku, zeit, aws, GCE. 
-
-It's pure python without outside dependencies, so it's esy to host.
+It's pure python without outside dependencies, so it's easy to host wherever you want.
 
 # Configuration
 
