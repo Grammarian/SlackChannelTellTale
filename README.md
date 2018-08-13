@@ -23,3 +23,8 @@ This app requires a couple of pieces of configuration, supplied via environment 
     export SLACK_VERIFICATION_TOKEN="PUT_YOUR_TOKEN_HERE"
     export SLACK_BOT_TOKEN="PUT_YOUR_SLACKBOT_TOKEN_HERE"
 
+# Slack integrations
+
+This project uses Slack's python api toolkit: https://github.com/slackapi/python-slack-events-api
+
+You will need to follow the instructions given in that project about how to create an app for slack, and configure it to receive events from your Slack instance.
