@@ -25,10 +25,11 @@ This app requires a couple of pieces of configuration, supplied via environment 
     export TARGET_CHANNEL_ID="#your-channel"
    
 `CHANNEL_PREFIXES` is a whitespace separated list of prefixes -- a new channel name must begin with one of these
-prefixes in order to generate a notification
-If this is not set or is empty, *all* new channels will generate a notification. 
+prefixes in order to generate a notification.
 
 For example, if this is set to `"eng- biz- ops-"`, then a new channel `#biz-excel` would be reported, but `#pics-puppies` would not.
+
+If this is not set or is empty, *all* new channels will generate a notification. 
 
 `SLACK_BOT_TOKEN` is the token that allows your app to post messages. **REQUIRED**
 
