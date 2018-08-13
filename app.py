@@ -8,7 +8,7 @@ from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 
 # Constants
-CHANNEL_PREFIXES = ["api-", "bi-", "bug-", "dat", "dev-", "ftr-", "im-", "prj-", "scrum", "tf-", "tpc-", "jpp-"]
+#CHANNEL_PREFIXES = ["api-, bi-, bug-, dat, dev-, ftr-, im-, prj-, scrum, tf-, tpc-, jpp-"]
 MESSAGE = "*%s* just created a new channel :tada:\n<#%s|%s>\nIts purpose is: %s"
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00" ]
 
@@ -18,6 +18,7 @@ PORT = os.environ.get("PORT") or 3000
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
+CHANNEL_PREFIXES = os.environ.get("CHANNEL_PREFIXES", "").split() # whitespace separated list
 
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
@@ -116,7 +117,7 @@ def handle_channel_created(event_data):
 
     # Is the new channel one of the ones that we want to report?
     channel_name = channel["name"]
-    if not any(channel_name.startswith(prefix) for prefix in CHANNEL_PREFIXES):
+    if CHANNEL_PREFIXES and not any(channel_name.startswith(x) for x in CHANNEL_PREFIXES):
         _logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
         return
 
@@ -145,7 +146,6 @@ def handle_channel_created(event_data):
     creater_name = nested_get(creator_info, "user", "profile", "real_name_normalized")
     creater_image = nested_get(creator_info, "user", "profile", "image_24")
     channel_id = nested_get(channel_info, "channel", "id"), 
-    channel_name = nested_get(channel_info, "channel", "name"), 
     channel_purpose = nested_get(channel_info, "channel", "purpose", "value")
     message = MESSAGE % (
         creater_name, 
