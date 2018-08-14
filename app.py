@@ -2,6 +2,7 @@ import os
 import logging
 import random
 import time
+import redis
 
 from flask import Flask
 from slackeventsapi import SlackEventAdapter
@@ -18,6 +19,7 @@ SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.environ.get("CHANNEL_PREFIXES", "").split() # whitespace separated list
+REDIS_URL = os.getenv("REDISTOGO_URL", "redis://localhost:6379")
 
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
@@ -30,6 +32,7 @@ _logger.info("DEBUG: %s", DEBUG)
 _logger.info("PORT: %s", PORT)
 _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
 _logger.info("TARGET_CHANNEL_ID: %s", TARGET_CHANNEL_ID)
+_logger.info("REDIS_URL: %s", REDIS_URL)
 
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
@@ -38,12 +41,8 @@ app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 
-# Persistent variables -- sort of
-# The hosting site can shutdown the service any time it likes, so these will be lost.
-# We could store this information in Redis, but that might be overkill. It just so
-# happens that all events are likely to happen about the same time, so it's probably
-# that keeping this in memory will work just fine without redis.
-already_seen = {}
+# Initialize redis
+_redis = redis.from_url(REDIS_URL)
 
 
 def nested_get(d, *keys):
@@ -62,11 +61,13 @@ def remember_channel(channel):
     """
     Remember the given channel. Return a bool indicating if we've already seen it
     """
-    channel_id = channel["id"]
-    if channel_id in already_seen:
-        return True
-    already_seen[channel_id] = channel.get("created")
-    return False
+    redis_channel_key = "channel:%s" % channel["id"]
+    is_new = _redis.setnx(redis_channel_key, channel.get("created"))
+    if is_new:
+        # We don't want our redis instance to just continue growing, so
+        # delete the key after 24 hours
+        _redis.expire(redis_channel_key, 24*60*60) 
+    return not is_new
 
 
 def get_channel_info(channel_id):
