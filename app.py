@@ -13,13 +13,13 @@ MESSAGE = "*%s* just created a new channel :tada:\n<#%s|%s>\nIts purpose is: %s"
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00" ]
 
 # Get environment settings
-DEBUG = bool(os.environ.get("DEBUG"))
-PORT = os.environ.get("PORT") or 3000
+DEBUG = bool(os.getenv("DEBUG"))
+PORT = os.getenv("PORT") or 3000
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
-CHANNEL_PREFIXES = os.environ.get("CHANNEL_PREFIXES", "").split() # whitespace separated list
-REDIS_URL = os.getenv("REDISTOGO_URL", "redis://localhost:6379")
+CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split() # whitespace separated list
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'

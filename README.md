@@ -41,4 +41,6 @@ You will need to follow the instructions given in that project about how to crea
 
 This app can be run locally, via ngrok. But, more normally, it would be hosted somewhere: heroku, zeit, aws, GCE. 
 
-It's pure python without outside dependencies, so it's easy to host wherever you want.
+It uses Redis to store a small amount of state between runs. The redis instance is currently accessed through `REDIS_URL` environment variable.
+
+Apart from the redis dependency, the app is pure python, so it should be easy to host wherever you want.
