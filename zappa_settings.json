@@ -1,0 +1,29 @@
+{
+    "dev": {
+        "app_function": "app.app", 
+        "aws_region": "ap-southeast-2", 
+        "exclude": [
+            "__pycache__",
+            ".vscode/*",
+            ".env",
+            ".git/*",
+            ".gitignore",
+            ".python-version",
+            "env/*",
+            "images/*",
+            "LICENSE",
+            "README.md",
+            "requirements.txt",
+            "example-structures.txt",
+            "logs.log",
+            "zappa_settings.json"
+        ],
+        "keep_warm": true,
+        "keep_warm_expression": "rate(5 minutes)",
+        "memory_size": 128,
+        "profile_name": "default", 
+        "project_name": "channeltelltale", 
+        "runtime": "python2.7", 
+        "s3_bucket": "zappa-pul1xx76r"
+    }
+}

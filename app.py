@@ -19,7 +19,7 @@ SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split() # whitespace separated list
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL")
 
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
@@ -41,8 +41,9 @@ app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 
-# Initialize redis
-_redis = redis.from_url(REDIS_URL)
+# Initialize redis cache
+_redis = redis.from_url(REDIS_URL) if REDIS_URL is not None else None
+_non_redis_cache = {}
 
 
 def nested_get(d, *keys):
@@ -61,6 +62,16 @@ def remember_channel(channel):
     """
     Remember the given channel. Return a bool indicating if we've already seen it
     """
+    if _redis:
+        return _remember_channel_redis(channel)
+    else:
+        return _remember_channel_non_redis(channel)
+
+
+def _remember_channel_redis(channel):
+    """
+    Remember the given channel using redis. Return a bool indicating if we've already seen it
+    """        
     redis_channel_key = "channel:%s" % channel["id"]
     is_new = _redis.setnx(redis_channel_key, channel.get("created"))
     if is_new:
@@ -68,6 +79,18 @@ def remember_channel(channel):
         # delete the key after 24 hours
         _redis.expire(redis_channel_key, 24*60*60) 
     return not is_new
+
+
+def _remember_channel_non_redis(channel):
+    """
+    Remember the given channel without redis. Return a bool indicating if we've already seen it.
+    This isn't perfect but it's (probably) better than nothing :)
+    """        
+    channel_id = channel["id"]
+    if channel_id in _non_redis_cache:
+        return True
+    _non_redis_cache[channel_id] = channel.get("created")
+    return False
 
 
 def get_channel_info(channel_id):
