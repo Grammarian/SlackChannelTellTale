@@ -20,7 +20,7 @@ SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split() # whitespace separated list
 REDIS_URL = os.getenv("REDIS_URL")
-
+ 
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
@@ -203,6 +203,9 @@ def handle_channel_created(event_data):
 def ping_handler():
     return "pong"
 
+@app.route("/")
+def slash_handler():
+    return "channelTellTale"
 
 def main():
     _logger.info("Starting server at %s", PORT)

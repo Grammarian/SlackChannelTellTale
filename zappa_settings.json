@@ -3,19 +3,16 @@
         "app_function": "app.app", 
         "aws_region": "ap-southeast-2", 
         "exclude": [
-            "__pycache__",
-            ".vscode/*",
             ".env",
-            ".git/*",
             ".gitignore",
             ".python-version",
-            "env/*",
-            "images/*",
+            ".vscode",
+            "example-structures.txt",
+            "images",
             "LICENSE",
             "README.md",
             "requirements.txt",
-            "example-structures.txt",
-            "logs.log",
+            "venv",
             "zappa_settings.json"
         ],
         "keep_warm": true,
@@ -25,5 +22,15 @@
         "project_name": "channeltelltale", 
         "runtime": "python2.7", 
         "s3_bucket": "zappa-pul1xx76r"
+    },
+    "prod": {
+        "extends": "dev",
+        "aws_region": "us-east-1", 
+        "profile_name": "ttd", 
+        "project_name": "slack-channeltelltale", 
+        "runtime": "python2.7", 
+        "manage_roles": false, 
+        "role_arn": "arn:aws:iam::003576902480:role/Zappa-Lambda-Role", 
+        "s3_bucket": "ttd-zappa-lambda-deployments"
     }
 }
