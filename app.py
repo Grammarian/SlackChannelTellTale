@@ -1,10 +1,11 @@
+import json
 import os
 import logging
 import random
 import time
 import redis
 
-from flask import Flask
+from flask import Flask, request, make_response
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 
@@ -134,7 +135,7 @@ def handle_channel_created(event_data):
     """
     Event callback when a new channel is created
     """
-    _logger.info("received event: %s", repr(event_data))
+    _logger.info("received channel_created event: %s", repr(event_data))
 
     # Make sure the event structure is sensible
     channel = nested_get(event_data, "event", "channel")
@@ -198,10 +199,147 @@ def handle_channel_created(event_data):
     slack_client.api_call("chat.postMessage", channel=TARGET_CHANNEL_ID, attachments=[fancy_message])
 
 
+hack_channel = "#jpp-notify-ttd-aws"
+
+@slack_events_adapter.on("channel_rename")
+def handle_channel_renamed(event_data):
+    """
+    Event callback when a channel is renamed
+    """
+    _logger.info("received channel_rename event: %s", repr(event_data))
+
+    # Make sure the event structure is sensible
+    channel = nested_get(event_data, "event", "channel")
+    if not channel or \
+       "id" not in channel or \
+       "name" not in channel or \
+       "creator" not in channel:
+        _logger.error("ignored... event was missing require attributes")
+        return
+
+    # Is the new channel one of the ones that we want to report?
+    channel_name = channel["name"]
+    if CHANNEL_PREFIXES and not any(channel_name.startswith(x) for x in CHANNEL_PREFIXES):
+        _logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
+        return
+
+    # Have we received an creation event about this channel before?
+    if remember_channel(channel):
+        _logger.info("ignored... we've already processed this channel: %s", channel_name)
+        return
+
+    # Fetch the full info about the creator of the channel
+    creator_info = slack_client.api_call("users.info", user=channel["creator"])
+    if not creator_info or not creator_info.get("ok"):
+        _logger.error("ignored... fetching of creator failed: %s", repr(creator_info))
+        return
+
+    # Try hard to fetch the full info about the channel
+    channel_info = insistent_get_channel_info(channel["id"]) 
+    if not channel_info:
+        return
+
+    # Log for debugging if needed
+    _logger.info("channel_info: %s", repr(channel_info))
+    _logger.info("creator_info: %s", repr(creator_info))
+
+    # Make a nicely format notification
+    creater_id = nested_get(creator_info, "user", "id")
+    creater_name = nested_get(creator_info, "user", "profile", "real_name_normalized")
+    creater_image = nested_get(creator_info, "user", "profile", "image_24")
+    channel_id = nested_get(channel_info, "channel", "id"), 
+    channel_purpose = nested_get(channel_info, "channel", "purpose", "value")
+    message = MESSAGE % (
+        creater_name, 
+        channel_id, 
+        channel_name, 
+        channel_purpose
+    )
+    fancy_message = {
+        "fallback": message,
+        "color": random.choice(COLORS),
+        "pretext": "A new channel has been created :tada:",
+        "author_name": "%s <@%s>" % (creater_name, creater_id),
+        "author_icon": creater_image,
+        "title": "<#%s>" % channel_id,
+        "text": channel_purpose
+    }
+    _logger.info("sending to %s: %s", TARGET_CHANNEL_ID, repr(fancy_message))
+
+    # Finally, announce the new channel in the announcement channel
+    #slack_client.api_call("chat.postMessage", channel=TARGET_CHANNEL_ID, attachments=[fancy_message])
+    slack_client.api_call("chat.postMessage", channel=hack_channel, attachments=[fancy_message])
+
+
 # Test route: http://localhost:3000/ping
 @app.route("/ping")
 def ping_handler():
     return "pong"
+
+@app.route("/poke")
+def poke_handler():
+    fancy_message = {
+        "fallback": "fallback message",
+        "pretext": "A new channel has been created :tada:",
+        "author_name": "joe",
+        "title": "fixed title",
+        "text": "fixed test message",
+        "attachment_type": "default",
+        "callback_id": "poking_around",
+        "actions": [
+            {
+                "name": "game",
+                "text": "Chess",
+                "type": "button",
+                "value": "chess"
+            },
+            {
+                "name": "game",
+                "text": "Falken's Maze",
+                "type": "button",
+                "value": "maze"
+            },
+            {
+                "name": "game",
+                "text": "Thermonuclear War",
+                "style": "danger",
+                "type": "button",
+                "value": "war",
+                "confirm": {
+                    "title": "Are you sure?",
+                    "text": "Wouldn't you prefer a good game of chess?",
+                    "ok_text": "Yes",
+                    "dismiss_text": "No"
+                }
+            }
+        ]
+    }
+    _logger.info("sending message: %s", repr(fancy_message))
+    slack_client.api_call("chat.postMessage", channel=hack_channel, attachments=[fancy_message])
+    return "sending poke message"
+
+@app.route("/interactive", methods=["GET", "POST"])
+def interactive_handler():
+        # If a GET request is made, return 404.
+    if request.method == 'GET':
+        return make_response("These are not the slackbots you're looking for.", 404)
+
+    # Parse the request payload into JSON
+    event_data = json.loads(request.form["payload"])
+    _logger.info("interactive_handler: %s", repr(event_data))
+
+    actions = event_data.get("actions")
+    if actions and len(actions):
+        action = actions[0]
+        response_message = {
+            "fallback": "Button was clicked",
+            "pretext": "You clicked the '%s' button" % action.get("value", "???"),
+        }
+        slack_client.api_call("chat.postMessage", channel=hack_channel, attachments=[response_message])
+    else:
+        _logger.info("payload was missing 'actions'")
+
+    return "finished interactive message"
 
 @app.route("/")
 def slash_handler():
