@@ -216,8 +216,7 @@ def handle_channel_renamed(event_data):
     _logger.info("received channel_rename event: %s", repr(event_data))
 
     channel = nested_get(event_data, "event", "channel")
-    # _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
-    _process_channel_event("rename", channel, hack_channel)
+    _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
 
 
 def _process_channel_event(event_type, channel, target_channel_id):

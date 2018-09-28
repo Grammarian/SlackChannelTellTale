@@ -3,6 +3,7 @@
         "app_function": "app.app", 
         "aws_region": "ap-southeast-2", 
         "exclude": [
+            "*.log",
             ".env",
             ".gitignore",
             ".python-version",
@@ -12,6 +13,7 @@
             "LICENSE",
             "README.md",
             "requirements.txt",
+            "test-messages",
             "venv",
             "zappa_settings.json"
         ],
