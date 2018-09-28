@@ -1,4 +1,6 @@
-# Overview
+# Slack channel tell tale
+
+## Overview
 
 In any organisation, there are always new discussions and groups being formed. It can be impossible to even know
 what people are discussing, let alone to keep up. 
@@ -9,7 +11,7 @@ When a new channel is created, this app will send a notification to a configured
 
 ![New channel notification](/images/sshot-notification.png?raw=true "New Channel Notification")
 
-# Configuration
+## Configuration
 
 This app requires a couple of pieces of configuration, supplied via environment variables:
 
@@ -17,7 +19,7 @@ This app requires a couple of pieces of configuration, supplied via environment 
     export SLACK_BOT_TOKEN="PUT_YOUR_SLACKBOT_TOKEN_HERE"
     export SLACK_VERIFICATION_TOKEN="PUT_YOUR_TOKEN_HERE"
     export TARGET_CHANNEL_ID="#your-channel"
-   
+
 `CHANNEL_PREFIXES` is a whitespace separated list of prefixes -- a new channel name must begin with one of these
 prefixes in order to generate a notification.
 
@@ -31,16 +33,28 @@ If this is not set or is empty, *all* new channels will generate a notification.
 
 `TARGET_CHANNEL_ID` is the channel name where the notifications will be posted. **REQUIRED**
 
-# Slack integrations
+## Slack integrations
 
 This project uses Slack's python api toolkit: https://github.com/slackapi/python-slack-events-api
 
 You will need to follow the instructions given in that project about how to create an app for slack, and configure it to receive events from your Slack instance.
 
-# Hosting
+## Hosting
 
-This app can be run locally, via ngrok. But, more normally, it would be hosted somewhere: heroku, zeit, aws, GCE. 
+This app can be run locally, via ngrok. But, more normally, it would be hosted somewhere: heroku, zeit, aws, GCE.
 
 It uses Redis to store a small amount of state between runs. The redis instance is currently accessed through `REDIS_URL` environment variable.
 
 Apart from the redis dependency, the app is pure python, so it should be easy to host wherever you want.
+
+## Local testing
+
+Set up the above environment variables, then run it:
+
+    > python app.py
+
+When it is up and running, you can send messages to it. The `test-messages` directory contains some samples:
+
+    > curl -s --header "Content-Type: application/json" --data @test-messages/channel-create-good.json http://localhost:3000/slack/events
+
+You will have to put your `SLACK_VERIFICATION_TOKEN` into the json files, or your bot will reject them.

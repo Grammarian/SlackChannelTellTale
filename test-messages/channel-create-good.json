@@ -1,0 +1,25 @@
+{
+    "team_id": "T0AT6LB9B",
+    "api_app_id": "AC4HTQVH9",
+    "event_time": 1537991036,
+    "event_id": "EvD1212TJL",
+    "type": "event_callback",
+    "authed_users": [
+      "UAKA6GKFF"
+    ],
+    "token": "[Put SLACK_VERIFICATION_TOKEN here BUT dont check it in!]",
+    "event": {
+      "event_ts": "1537991036.000100",
+      "type": "channel_created",
+      "channel": {
+        "is_org_shared": false,
+        "name_normalized": "dev-so-trial-notify",
+        "name": "dev-so-trial-notify",
+        "is_channel": true,
+        "creator": "U0BPCEYR4",
+        "created": 1537991036,
+        "id": "CD1USGKT7",
+        "is_shared": false
+      }
+    }
+  }

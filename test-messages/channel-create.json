@@ -1,0 +1,25 @@
+{
+    "api_app_id": "AC4HTQVH9",
+    "authed_users": [
+      "UAKA6GKFF"
+    ],
+    "event": {
+      "channel": {
+        "created": 1537972363,
+        "creator": "U3SL4EE4W",
+        "id": "CD2RM9DSS",
+        "is_channel": true,
+        "is_org_shared": false,
+        "is_shared": false,
+        "name": "spend-drop-issue-2609",
+        "name_normalized": "spend-drop-issue-2609"
+      },
+      "event_ts": "1537972363.000100",
+      "type": "channel_created"
+    },
+    "event_id": "EvD1F4U10A",
+    "event_time": 1537972363,
+    "team_id": "T0AT6LB9B",
+    "token": "[Put SLACK_VERIFICATION_TOKEN here BUT dont check it in!]",
+    "type": "event_callback"
+  }

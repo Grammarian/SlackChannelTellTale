@@ -1,0 +1,22 @@
+{
+    "event_time": 1538034831,
+    "api_app_id": "AC4HTQVH9",
+    "event_id": "EvD1BREXH6",
+    "authed_users": [
+      "UAKA6GKFF"
+    ],
+    "team_id": "T0AT6LB9B",
+    "token": "[Put SLACK_VERIFICATION_TOKEN here BUT dont check it in!]",
+    "type": "event_callback",
+    "event": {
+      "event_ts": "1538034831.000100",
+      "type": "channel_rename",
+      "channel": {
+        "created": 1538034756,
+        "name_normalized": "jpp-unignored-test-1",
+        "id": "CD1FT1KLZ",
+        "is_channel": true,
+        "name": "jpp-unignored-test-1"
+      }
+    }
+  }
