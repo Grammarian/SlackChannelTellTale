@@ -3,7 +3,7 @@
 ## Overview
 
 In any organisation, there are always new discussions and groups being formed. It can be impossible to even know
-what people are discussing, let alone to keep up. 
+what people are discussing, let alone to keep up.
 
 This app at least lets people know what new discussions are being created.
 
@@ -25,7 +25,7 @@ prefixes in order to generate a notification.
 
 For example, if this is set to `"eng- biz- ops-"`, then a new channel `#biz-excel` would be reported, but `#pics-puppies` would not.
 
-If this is not set or is empty, *all* new channels will generate a notification. 
+If this is not set or is empty, *all* new channels will generate a notification.
 
 `SLACK_BOT_TOKEN` is the token that allows your app to post messages. **REQUIRED**
 
@@ -35,7 +35,7 @@ If this is not set or is empty, *all* new channels will generate a notification.
 
 ## Slack integrations
 
-This project uses Slack's python api toolkit: https://github.com/slackapi/python-slack-events-api
+This project uses Slack's python api toolkit: <https://github.com/slackapi/python-slack-events-api>
 
 You will need to follow the instructions given in that project about how to create an app for slack, and configure it to receive events from your Slack instance.
 
