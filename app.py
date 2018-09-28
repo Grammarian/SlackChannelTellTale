@@ -1,3 +1,13 @@
+"""
+This file handles all the infra-structure of running a Slack bot: 
+    - gather config from environment variables
+    - running the HTTP server
+    - listening for events
+    - setup connections
+
+All actual bot logic is in the Processor class
+"""
+
 import json
 import os
 import logging
@@ -8,12 +18,12 @@ import redis
 from flask import Flask, request, make_response
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
+from processor import Processor
 
-# Constants
-MESSAGE = "*%s* just created a new channel :tada:\n<#%s|%s>\nIts purpose is: %s"
-COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00" ]
+APP_NAME = "ChannelTellTale"
 
-# Get environment settings
+# Get environment settings 
+# getenv() is used for optional settings; os.environ[] is used for required settings
 DEBUG = bool(os.getenv("DEBUG"))
 PORT = os.getenv("PORT") or 3000
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
@@ -25,7 +35,7 @@ REDIS_URL = os.getenv("REDIS_URL")
 # Initialize logging
 FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
-_logger = logging.getLogger("ChannelTellTale")
+_logger = logging.getLogger(APP_NAME)
  
 # Log some settings
 _logger.info("STARTING")
@@ -37,13 +47,18 @@ _logger.info("REDIS_URL: %s", REDIS_URL)
 
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
-
-# Initialize our slack interfaces
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 slack_client = SlackClient(SLACK_BOT_TOKEN)
-
-# Initialize redis cache
 _redis = redis.from_url(REDIS_URL) if REDIS_URL is not None else None
+
+_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, slack_client, _redis)
+
+###############
+# TO BE REMOVED
+
+MESSAGE = "*%s* just created a new channel :tada:\n<#%s|%s>\nIts purpose is: %s"
+COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00" ]
+
 _non_redis_cache = {}
 
 
@@ -125,23 +140,6 @@ def insistent_get_channel_info(channel_id):
     return channel_info
 
 
-@slack_events_adapter.on("channel_created")
-def handle_channel_created(event_data):
-    """
-    Event callback when a new channel is created
-    """
-    handle_channel_created_original(event_data)
-    #handle_channel_created_new(event_data)
-
-
-def handle_channel_created_new(event_data):
-    _logger.info("received channel_created event: %s", repr(event_data))
-
-    channel = nested_get(event_data, "event", "channel")
-    # _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
-    _process_channel_event("create", channel, hack_channel)
-
-
 def handle_channel_created_original(event_data):
     _logger.info("received channel_created event: %s", repr(event_data))
 
@@ -206,7 +204,19 @@ def handle_channel_created_original(event_data):
     # Finally, announce the new channel in the announcement channel
     slack_client.api_call("chat.postMessage", channel=TARGET_CHANNEL_ID, attachments=[fancy_message])
 
-hack_channel = "#jpp-notify-ttd-aws"
+# DELETE UP TO HERE
+########################
+
+
+@slack_events_adapter.on("channel_created")
+def handle_channel_created(event_data):
+    """
+    Event callback when a new channel is created
+    """
+    _logger.info("received channel_rename event: %s", repr(event_data))
+    #handle_channel_created_original(event_data)
+    _processor.process_channel_event("create", event_data)
+
 
 @slack_events_adapter.on("channel_rename")
 def handle_channel_renamed(event_data):
@@ -214,108 +224,16 @@ def handle_channel_renamed(event_data):
     Event callback when a channel is renamed
     """
     _logger.info("received channel_rename event: %s", repr(event_data))
-
-    channel = nested_get(event_data, "event", "channel")
-    _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
+    _processor.process_channel_event("rename", event_data)
 
 
-def _process_channel_event(event_type, channel, target_channel_id):
-    """
-    When a channel is created or renamed, send a notification message to the target channel, if required.
-
-    For the same channel, we will only send one notification message, even if we receive multiple
-    created notifications, or if it is renamed multiple times.
-    """
-    # Make sure the event structure is sensible
-    if not channel or \
-       "id" not in channel or \
-       "name" not in channel:
-        _logger.error("ignored... event was missing require attributes")
-        return
-
-    channel_id = channel["id"]
-    channel_name = channel["name"]
-
-    # Is the new channel one of the ones that we want to report?
-    if CHANNEL_PREFIXES and not any(channel_name.startswith(x) for x in CHANNEL_PREFIXES):
-        _logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
-        return
-
-    # Have we already processed this channel?
-    if remember_channel(channel):
-        _logger.info("ignored... we've already processed this channel: %s/%s", channel_id, channel_name)
-        return
-
-    # Try hard to fetch the full info about the channel
-    channel_info = insistent_get_channel_info(channel_id) 
-    if not channel_info:
-        _logger.error("ignored.... failed to get information about the channel (%s/%s)", channel_id, channel_name)
-        return
-
-    # Fetch the full info about the creator of the channel
-    creator_id = nested_get(channel_info, "channel", "creator")
-    if not creator_id:
-        _logger.error("ignored... channel did not contain creator: %s", repr(channel_info))
-        return
-    creator_info = slack_client.api_call("users.info", user=creator_id)
-    if not creator_info or not creator_info.get("ok"):
-        _logger.error("ignored... fetching of creator failed: %s", repr(creator_info))
-        return
-
-    # We now have all the information that we need to send the creation notification
-    _send_pretty_notification(event_type, target_channel_id, channel_info.get("channel"), creator_info.get("user"))
-
-
-def _send_pretty_notification(event_type, target_channel_id, channel, creator):
-    """
-    Send a channel creation notification to the given target channel
-    """
-    # Log for debugging if needed
-    _logger.info("channel: %s", json.dumps(channel))
-    _logger.info("creator: %s", json.dumps(creator))
-
-    # Setup all the values that will be needed for the messages
-    values = {
-        "creator_id": nested_get(creator, "id"),
-        "creator_name": nested_get(creator, "profile", "real_name_normalized"),
-        "creator_image": nested_get(creator, "profile", "image_24"),
-        "channel_id": nested_get(channel, "id"), 
-        "channel_name": nested_get(channel, "name"), 
-        "channel_purpose": nested_get(channel, "purpose", "value"),
-        "rename_msg": "(via renaming)" if event_type == "rename" else "" 
-    }
-
-    # Use templates for all fields in the message (even though some don't need complex substitutions)
-    FALLBACK_MESSAGE = "{creator_name} just created a new channel :tada:\n<#{channel_id}|{channel_name}>\nIts purpose is: {channel_purpose}"
-    PRETEXT_MESSAGE = "A new channel has been created {rename_msg} :tada:"
-    AUTHOR_NAME = "{creator_name} <@{creator_id}>"
-    TITLE = "<#{channel_id}>"
-    CREATOR_IMAGE = "{creator_image}"
-    PURPOSE = "{channel_purpose}"
-
-    COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00" ]
-
-    # Make a nicely format notification
-    fancy_message = {
-        "fallback":  FALLBACK_MESSAGE.format(**values),
-        "color": random.choice(COLORS),
-        "pretext": PRETEXT_MESSAGE.format(**values),
-        "author_name":  AUTHOR_NAME.format(**values), 
-        "author_icon": CREATOR_IMAGE.format(**values),
-        "title": TITLE.format(**values),
-        "text": PURPOSE.format(**values)
-    }
-    _logger.info("sending to %s: %s", target_channel_id, json.dumps(fancy_message))
-
-    # Finally, announce the new channel in the announcement channel
-    slack_client.api_call("chat.postMessage", channel=target_channel_id, attachments=[fancy_message])
 
 #-------------------------
 # Normal selector handling
 
 @app.route("/")
 def slash_handler():
-    return "channelTellTale"
+    return APP_NAME
 
 
 # Test route: http://localhost:3000/ping
@@ -323,6 +241,10 @@ def slash_handler():
 def ping_handler():
     return "pong"
 
+#------------------------
+# Playing 
+
+hack_channel = "#jpp-notify-ttd-aws"
 
 @app.route("/poke")
 def poke_handler():
@@ -389,8 +311,11 @@ def interactive_handler():
 
     return "finished interactive message"
 
+# end playing
+#------------
+
 def main():
-    _logger.info("Starting server at %s", PORT)
+    _logger.info("Starting %s server at %s", APP_NAME, PORT)
     app.run(port=PORT, debug=DEBUG)
 
 if __name__ == "__main__":

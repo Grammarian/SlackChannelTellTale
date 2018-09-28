@@ -2,4 +2,5 @@ env
 .env
 .vscode
 *.log
+*.pyc
 venv
