@@ -130,6 +130,19 @@ def handle_channel_created(event_data):
     """
     Event callback when a new channel is created
     """
+    handle_channel_created_original(event_data)
+    #handle_channel_created_new(event_data)
+
+
+def handle_channel_created_new(event_data):
+    _logger.info("received channel_created event: %s", repr(event_data))
+
+    channel = nested_get(event_data, "event", "channel")
+    # _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
+    _process_channel_event("create", channel, hack_channel)
+
+
+def handle_channel_created_original(event_data):
     _logger.info("received channel_created event: %s", repr(event_data))
 
     # Make sure the event structure is sensible
@@ -193,6 +206,7 @@ def handle_channel_created(event_data):
     # Finally, announce the new channel in the announcement channel
     slack_client.api_call("chat.postMessage", channel=TARGET_CHANNEL_ID, attachments=[fancy_message])
 
+hack_channel = "#jpp-notify-ttd-aws"
 
 @slack_events_adapter.on("channel_rename")
 def handle_channel_renamed(event_data):
@@ -202,7 +216,8 @@ def handle_channel_renamed(event_data):
     _logger.info("received channel_rename event: %s", repr(event_data))
 
     channel = nested_get(event_data, "event", "channel")
-    _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
+    # _process_channel_event("rename", channel, TARGET_CHANNEL_ID)
+    _process_channel_event("rename", channel, hack_channel)
 
 
 def _process_channel_event(event_type, channel, target_channel_id):
@@ -303,12 +318,12 @@ def _send_pretty_notification(event_type, target_channel_id, channel, creator):
 def slash_handler():
     return "channelTellTale"
 
+
 # Test route: http://localhost:3000/ping
 @app.route("/ping")
 def ping_handler():
     return "pong"
 
-hack_channel = "#jpp-notify-ttd-aws"
 
 @app.route("/poke")
 def poke_handler():
