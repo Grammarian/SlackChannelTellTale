@@ -16,6 +16,7 @@ from flask import Flask
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 from processor import Processor
+from slack_client_wrapper import SlackClientWrapper
 
 APP_NAME = "ChannelTellTale"
 
@@ -30,7 +31,7 @@ CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split() # whitespace separa
 REDIS_URL = os.getenv("REDIS_URL")
  
 # Initialize logging
-FORMAT = '%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s'
+FORMAT = "%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
 _logger = logging.getLogger(APP_NAME)
  
@@ -48,10 +49,11 @@ slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/event
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 
-_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, slack_client, _redis)
+_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, SlackClientWrapper(slack_client), _redis)
 
-#-------------------------
+# -------------------------
 # Slack event handling
+
 
 @slack_events_adapter.on("channel_created")
 def handle_channel_created(event_data):
@@ -71,7 +73,7 @@ def handle_channel_renamed(event_data):
     _processor.process_channel_event("rename", event_data)
 
 
-#-------------------------
+# -------------------------
 # Normal selector handling
 
 @app.route("/")
@@ -88,10 +90,11 @@ def main():
     _logger.info("Starting %s server at %s", APP_NAME, PORT)
     app.run(port=PORT, debug=DEBUG)
 
+
 if __name__ == "__main__":
     main()
 
-#------------------------
+# ------------------------
 # Playing 
 
 # hack_channel = "#jpp-notify-ttd-aws"
@@ -162,5 +165,5 @@ if __name__ == "__main__":
 #     return "finished interactive message"
 
 # end playing
-#------------
+# ------------
 
