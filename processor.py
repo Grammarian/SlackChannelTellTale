@@ -139,29 +139,23 @@ class Processor:
             "rename_msg": "(via renaming)" if event_type == "rename" else ""
         }
 
-        # Use templates for all fields in the message (even though some don't need complex substitutions)
-        FALLBACK_MESSAGE = "{creator_name} just created a new channel :tada:\n" \
-                           "<#{channel_id}|{channel_name}>\n" \
-                           "Its purpose is: {channel_purpose} "
-        PRETEXT_MESSAGE = "A new channel has been created {rename_msg} :tada:"
-        AUTHOR_NAME = "{creator_name} <@{creator_id}>"
-        TITLE = "<#{channel_id}>"
-        CREATOR_IMAGE = "{creator_image}"
-        PURPOSE = "{channel_purpose}"
-
+        # Use templates for all fields in the message (even though some don't need complex substitutions).
+        # The messages use the attachments format: https://api.slack.com/docs/message-attachments
         COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6",
                   "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
-
-        # Make a nicely format notification
-        fancy_message = {
-            "fallback": FALLBACK_MESSAGE.format(**values),
+        MESSAGE_TEMPLATE = {
+            "fallback": "{creator_name} just created a new channel {rename_msg} :tada:\n"
+                        "<#{channel_id}|{channel_name}>\n"
+                        "Its purpose is: {channel_purpose} ",
             "color": random.choice(COLORS),
-            "pretext": PRETEXT_MESSAGE.format(**values),
-            "author_name": AUTHOR_NAME.format(**values),
-            "author_icon": CREATOR_IMAGE.format(**values),
-            "title": TITLE.format(**values),
-            "text": PURPOSE.format(**values)
+            "pretext": "A new channel has been created {rename_msg} :tada:",
+            "author_name": "{creator_name} <@{creator_id}>",
+            "author_icon": "{creator_image}",
+            "title": "<#{channel_id}>",
+            "text": "{channel_purpose}"
         }
+        # Make a nicely format notification from the above template
+        fancy_message = {key: value.format(**values) for (key, value) in MESSAGE_TEMPLATE.items()}
         self.logger.info("sending to %s: %s", self.target_channel_id, json.dumps(fancy_message))
 
         # Finally, announce the new channel in the announcement channel
