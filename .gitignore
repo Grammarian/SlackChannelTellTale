@@ -1,5 +1,6 @@
 env
 .env
+.idea
 .vscode
 *.log
 *.pyc
