@@ -27,21 +27,23 @@ PORT = os.getenv("PORT") or 3000
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
-CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split() # whitespace separated list
+CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split()  # whitespace separated list
 REDIS_URL = os.getenv("REDIS_URL")
- 
+JIRA_URL = os.getenv("JIRA_URL")  # e.g. https://atlassian.mycompany.com
+
 # Initialize logging
 FORMAT = "%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
 _logger = logging.getLogger(APP_NAME)
  
 # Log some settings
-_logger.info("STARTING")
+_logger.info("STARTING %s", APP_NAME)
 _logger.info("DEBUG: %s", DEBUG)
 _logger.info("PORT: %s", PORT)
 _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
 _logger.info("TARGET_CHANNEL_ID: %s", TARGET_CHANNEL_ID)
 _logger.info("REDIS_URL: %s", REDIS_URL)
+_logger.info("JIRA_URL: %s", JIRA_URL)
 
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
@@ -49,7 +51,7 @@ slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/event
 slack_client = SlackClient(SLACK_BOT_TOKEN)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 
-_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, SlackClientWrapper(slack_client), _redis)
+_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, SlackClientWrapper(slack_client), _redis, jira=JIRA_URL)
 
 # -------------------------
 # Slack event handling

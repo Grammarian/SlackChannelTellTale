@@ -19,6 +19,21 @@ CREATE_EVENT = {
     }
 }
 
+CREATE_EVENT_JIRA = {
+    "type": "event_callback",
+    "event": {
+        "event_ts": "1537991036.000100",
+        "type": "channel_created",
+        "channel": {
+            "name_normalized": "jpp-PROJ-1234-dev-test-1",
+            "name": "jpp-PROJ-1234-dev-test-1",
+            "creator": "U0BPCEYR4",
+            "created": 1537991036,
+            "id": "CD1USGKT7",
+        }
+    }
+}
+
 RENAME_EVENT = {
     "type": "event_callback",
     "event": {
@@ -35,44 +50,65 @@ RENAME_EVENT = {
 }
 
 CHANNEL_INFO_SUCCESS = {
-    'ok': True,
-    'channel': {
-        'created': 1533784859,
-        'creator': 'UAKA6GKFF',
-        'id': 'CC5D77M5Y',
-        'is_channel': True,
-        'members': ['UAKA6GKFF'],
-        'name': 'jpp-test-2',
-        'name_normalized': 'jpp-test-2',
-        'purpose': {
-            'creator': 'UAKA6GKFF',
-            'value': 'TESTING THIS'
+    "ok": True,
+    "channel": {
+        "created": 1533784859,
+        "creator": "UAKA6GKFF",
+        "id": "CD1USGKT7",
+        "is_channel": True,
+        "members": ["UAKA6GKFF"],
+        "name": "jpp-test-2",
+        "name_normalized": "jpp-test-2",
+        "purpose": {
+            "creator": "UAKA6GKFF",
+            "value": "TESTING THIS"
         },
-        'topic': {
-            'creator': u'UAKA6GKFF',
-            'value': 'Channel topic'
+        "topic": {
+            "creator": "UAKA6GKFF",
+            "value": "Channel topic"
+        },
+    }
+}
+
+CHANNEL_INFO_SUCCESS_JIRA = {
+    "ok": True,
+    "channel": {
+        "created": 1533784859,
+        "creator": "UAKA6GKFF",
+        "id": "CD1USGKT7",
+        "is_channel": True,
+        "members": ["UAKA6GKFF"],
+        "name_normalized": "jpp-PROJ-1234-dev-test-1",
+        "name": "jpp-PROJ-1234-dev-test-1",
+        "purpose": {
+            "creator": "UAKA6GKFF",
+            "value": "TESTING THIS"
+        },
+        "topic": {
+            "creator": "UAKA6GKFF",
+            "value": "Channel topic"
         },
     }
 }
 
 USER_INFO_SUCCESS = {
-    u'ok': True,
-    u'user': {
-        u'id': u'UAKA6GKFF',
-        u'name': u'phillip.piper',
-        u'profile': {
-            u'display_name': u'phillip.piper',
-            u'display_name_normalized': u'phillip.piper',
-            u'email': u'phillip.piper@thetradedesk.com',
-            u'first_name': u'Phillip',
-            u'image_24': u'https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg',
-            u'last_name': u'Piper',
-            u'real_name': u'Phillip Piper',
-            u'real_name_normalized': u'Phillip Piper',
-            u'team': u'T0AT6LB9B',
-            u'title': u'Developer'
+    "ok": True,
+    "user": {
+        "id": "UAKA6GKFF",
+        "name": "phillip.piper",
+        "profile": {
+            "display_name": "phillip.piper",
+            "display_name_normalized": "phillip.piper",
+            "email": "phillip.piper@thetradedesk.com",
+            "first_name": "Phillip",
+            "image_24": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
+            "last_name": "Piper",
+            "real_name": "Phillip Piper",
+            "real_name_normalized": "Phillip Piper",
+            "team": "T0AT6LB9B",
+            "title": "Developer"
         },
-        u'real_name': u'Phillip Piper'
+        "real_name": "Phillip Piper"
     }
 }
 
@@ -81,12 +117,12 @@ class TestProcessor(unittest.TestCase):
 
     def test_create(self):
         expected_message = {
-            'author_icon': 'https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg',
-            'author_name': 'Phillip Piper <@UAKA6GKFF>',
-            'fallback': 'Phillip Piper just created a new channel  :tada:\n<#CC5D77M5Y|jpp-test-2>\nIts purpose is: TESTING THIS ',
-            'pretext': 'A new channel has been created  :tada:',
-            'text': 'TESTING THIS',
-            'title': '<#CC5D77M5Y>'
+            "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
+            "author_name": "Phillip Piper <@UAKA6GKFF>",
+            "fallback": "Phillip Piper just created a new channel  :tada:\n<#CC5D77M5Y|jpp-test-2>\nIts purpose is: TESTING THIS ",
+            "pretext": "A new channel has been created  :tada:",
+            "text": "TESTING THIS",
+            "title": "<#CC5D77M5Y>"
         }
         event = CREATE_EVENT
         slack_client = MagicMock()
@@ -107,14 +143,37 @@ class TestProcessor(unittest.TestCase):
         del posted_message['color']  # the color of the message is random and can't be tested
         self.assertDictEqual(posted_message, expected_message)
 
+    def test_create_post_notify(self):
+        expected_message = {
+            "fallback": "This channel is related to this JIRA issue: https://something/jira/browse/PROJ-1234",
+            "title": "Related JIRA Issue",
+            "text": "https://something/jira/browse/PROJ-1234"
+        }
+        event = CREATE_EVENT_JIRA
+        slack_client = MagicMock()
+        slack_client.user_info.return_value = USER_INFO_SUCCESS
+        slack_client.channel_info.return_value = CHANNEL_INFO_SUCCESS_JIRA
+        logger = MagicMock()
+        target_channel = "target"
+
+        processor = Processor(target_channel, ["jpp-"], slack_client, logger=logger, jira="https://something")
+        processor.process_channel_event("create", event)
+
+        self.assertFalse(logger.error.called)
+        self.assertEqual(2, slack_client.post_chat_message.call_count)
+        ((posted_channel, posted_message), _) = slack_client.post_chat_message.call_args
+        self.assertEqual("CD1USGKT7", posted_channel)
+        del posted_message['color']  # the color of the message is random and can't be tested
+        self.assertDictEqual(posted_message, expected_message)
+
     def test_rename(self):
         expected_message = {
-            'author_icon': 'https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg',
-            'author_name': 'Phillip Piper <@UAKA6GKFF>',
-            'fallback': 'Phillip Piper just created a new channel (via renaming) :tada:\n<#CC5D77M5Y|jpp-test-2>\nIts purpose is: TESTING THIS ',
-            'pretext': 'A new channel has been created (via renaming) :tada:',
-            'text': 'TESTING THIS',
-            'title': '<#CC5D77M5Y>'
+            "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
+            "author_name": "Phillip Piper <@UAKA6GKFF>",
+            "fallback": "Phillip Piper just created a new channel (via renaming) :tada:\n<#CC5D77M5Y|jpp-test-2>\nIts purpose is: TESTING THIS ",
+            "pretext": "A new channel has been created (via renaming) :tada:",
+            "text": "TESTING THIS",
+            "title": "<#CC5D77M5Y>"
         }
         event = RENAME_EVENT
         slack_client = MagicMock()
@@ -165,6 +224,25 @@ class TestProcessor(unittest.TestCase):
         self.assertFalse(slack_client.post_chat_message.called)
         logger.info.assert_called_once_with("ignored... we've already processed this channel: %s/%s", channel_id,
                                             channel_name)
+
+    def test_jira_id_extraction(self):
+        slack_client = MagicMock()
+        processor = Processor("target", ["prefix1-", "something2_", "bug-"], slack_client)
+        tests = [
+            ("prefix1-not-jira-issue", None),
+            ("prefix1-some-text-and-a-number-9999-like-this", None),  # Jira id has to be immediately after prefix
+            ("prefix1-number-9999-like-this", "number-9999"),
+            ("bug-xyz-1234", "xyz-1234"),
+            ("bug-X1-01234", "X1-01234"),
+            ("bug-X-1", None),  # Project prefix has two have at least two characters
+            ("prefix1-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-1234", None),  # Just..no
+            ("prefix1-IM-1234-some-description", "IM-1234"),
+            ("something2_IM-1234-some-description", "IM-1234"),
+        ]
+        for (name, jira_id) in tests:
+            self.assertEqual(jira_id, processor._extract_jira_id(name))
+
+
 
 
 if __name__ == '__main__':

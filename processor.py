@@ -1,9 +1,13 @@
 import json
 import logging
 import random
+import re
 import time
 
 from in_memory_redis import InMemoryRedis
+
+COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff",
+          "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
 
 
 def nested_get(d, *keys):
@@ -23,12 +27,15 @@ class Processor:
     This class processes slack events and sends notification messages as required
     """
 
-    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None):
+    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None):
         self.target_channel_id = target_channel_id
         self.channel_prefixes = channel_prefixes
         self.slack_client = slack_client
         self.redis_client = redis_client or InMemoryRedis()
         self.logger = logger or logging.getLogger("Processor")
+
+        # Make sure that a non-None prefix ends with "/jira/browse/"
+        self.jira_prefix = jira if not jira or jira.endswith("/jira/browse/") else jira + "/jira/browse/"
 
     def remember_channel(self, channel):
         """
@@ -119,6 +126,9 @@ class Processor:
         # We now have all the information that we need to send the creation notification
         self._send_pretty_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
 
+        # Do any post notification processing
+        self._post_notification(event_type, channel_info.get("channel"))
+
     # noinspection PyPep8Naming
     def _send_pretty_notification(self, event_type, channel, creator):
         """
@@ -141,8 +151,6 @@ class Processor:
 
         # Use templates for all fields in the message (even though some don't need complex substitutions).
         # The messages use the attachments format: https://api.slack.com/docs/message-attachments
-        COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff", "#1de9b6",
-                  "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
         MESSAGE_TEMPLATE = {
             "fallback": "{creator_name} just created a new channel {rename_msg} :tada:\n"
                         "<#{channel_id}|{channel_name}>\n"
@@ -160,3 +168,68 @@ class Processor:
 
         # Finally, announce the new channel in the announcement channel
         self.slack_client.post_chat_message(self.target_channel_id, fancy_message)
+
+    def _post_notification(self, event_type, channel):
+        """
+        Do any post processing required. This can include setting the channel's purpose, topic, or
+        sending an intro message to the channel.
+
+        :param event_type: Was the channel created or renamed?
+        :param channel: Full channel info
+        """
+        # At the moment, all the post processing is only relevant to newly created channels
+        if event_type != "create":
+            return
+
+        # Similarly, all post processing is related to JIRA. So, if we're not configured for that, do nothing else
+        if not self.jira_prefix:
+            return
+
+        # For testing purposes, let's limit this to just my channels
+        channel_name = channel.get("name")
+        # if not channel_name.startswith("jpp"):
+        #     return
+
+        # If the channel isn't related to a JIRA ticket, there's nothing else to do
+        jira_id = self._extract_jira_id(channel_name)
+        if not jira_id:
+            return
+
+        link = self.jira_prefix + jira_id
+        message = {
+            "fallback": "This channel is related to this JIRA issue: %s" % link,
+            "color": random.choice(COLORS),
+            "title": "Related JIRA Issue",
+            "text": link
+        }
+        channel_id = channel.get("id")
+        self.logger.info("sending to %s: %s", channel_id, json.dumps(message))
+        self.slack_client.post_chat_message(channel_id, message)
+
+    def _extract_jira_id(self, channel_name):
+        """
+        If the channel name looks like it relates to a JIRA issue, extract and return the JIRA id.
+
+        The code understands channel names that looks like: [prefix]-[issue number]-[tail]
+        The dash before and after the jira id are optional.
+
+        Jira ids have to look like this: [A-Za-z]+ [dash] [0-9]+
+
+        Project prefixes are (by default) 2 uppercase letters, but only the first character *has*
+        to be a letter -- subsequent characters can also be numbers or underscore, but *not* hyphen.
+        https://confluence.atlassian.com/adminjiraserver/changing-the-project-key-format-938847081.html
+
+        Just for sanity, we limit the prefix and the issue number to 32 characters each.
+
+        :param channel_name:
+        :return: The jira id related to the name or None
+        """
+        name = self._remove_prefix(channel_name)
+        match = re.match("([A-Za-z][A-Za-z0-9_]{1,32}-[0-9]{1,32})", name)
+        return match.group(1) if match else None
+
+    def _remove_prefix(self, name):
+        for prefix in self.channel_prefixes:
+            if name.startswith(prefix):
+                return name[len(prefix):]
+        return name
