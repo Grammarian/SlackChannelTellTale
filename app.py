@@ -15,6 +15,8 @@ import redis
 from flask import Flask
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
+
+from bing_image_client import BingImageClient
 from processor import Processor
 from slack_client_wrapper import SlackClientWrapper
 
@@ -30,6 +32,7 @@ TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split()  # whitespace separated list
 REDIS_URL = os.getenv("REDIS_URL")
 JIRA_URL = os.getenv("JIRA_URL")  # e.g. https://atlassian.mycompany.com
+BING_API_KEY = os.getenv("BING_API_KEY")
 
 # Initialize logging
 FORMAT = "%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s"
@@ -44,14 +47,15 @@ _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
 _logger.info("TARGET_CHANNEL_ID: %s", TARGET_CHANNEL_ID)
 _logger.info("REDIS_URL: %s", REDIS_URL)
 _logger.info("JIRA_URL: %s", JIRA_URL)
+_logger.info("BING_API_KEY: %s", BING_API_KEY)
 
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
-slack_client = SlackClient(SLACK_BOT_TOKEN)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
-
-_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, SlackClientWrapper(slack_client), _redis, jira=JIRA_URL)
+_wrapper = SlackClientWrapper(SlackClient(SLACK_BOT_TOKEN), _logger)
+_image_search = BingImageClient(BING_API_KEY) if BING_API_KEY else None
+_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, image_searcher=_image_search)
 
 # -------------------------
 # Slack event handling
@@ -85,6 +89,14 @@ def slash_handler():
 
 @app.route("/ping")
 def ping_handler():
+    channel = {
+        "id": "CCLUV8FFH",
+        "name": "#fun-star-citizen",
+        "purpose": {
+            "value": "Discuss all things concerning Star Citizen space simulation game"
+        }
+    }
+    _processor._post_notification_intro_message(channel)
     return "pong"
 
 

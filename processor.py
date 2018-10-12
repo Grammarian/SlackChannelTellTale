@@ -4,22 +4,12 @@ import random
 import re
 import time
 
+from toolbox import nested_get
 from in_memory_redis import InMemoryRedis
+from uncommon_words import uncommon_words
 
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff",
           "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
-
-
-def nested_get(d, *keys):
-    """
-    Iteratively fetch keys from nested dictionaries
-    """
-    for k in keys:
-        if isinstance(d, dict):
-            d = d.get(k, None)
-        else:
-            return None
-    return d
 
 
 class Processor:
@@ -27,14 +17,15 @@ class Processor:
     This class processes slack events and sends notification messages as required
     """
 
-    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None):
+    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None, image_searcher=None):
         self.target_channel_id = target_channel_id
         self.channel_prefixes = channel_prefixes
         self.slack_client = slack_client
         self.redis_client = redis_client or InMemoryRedis()
         self.logger = logger or logging.getLogger("Processor")
+        self.image_search = image_searcher
 
-        # Make sure that a non-None prefix ends with "/jira/browse/"
+        # Make sure that, if there is a jira prefix, it ends with "/jira/browse/"
         self.jira_prefix = jira if not jira or jira.endswith("/jira/browse/") else jira + "/jira/browse/"
 
     def remember_channel(self, channel):
@@ -181,16 +172,25 @@ class Processor:
         if event_type != "create":
             return
 
-        # Similarly, all post processing is related to JIRA. So, if we're not configured for that, do nothing else
+        # For testing purposes, let's limit this to just my channels
+        if not channel.get("name").startswith("jpp"):
+            return
+
+        self._post_notification_jira(channel)
+        self._post_notification_intro_message(channel)
+
+    def _post_notification_jira(self, channel):
+        """
+        Do any post processing related to jira
+
+        :param channel: Full channel info
+        """
+        # If we're not configured for jira, there's nothing to do
         if not self.jira_prefix:
             return
 
-        # For testing purposes, let's limit this to just my channels
-        channel_name = channel.get("name")
-        # if not channel_name.startswith("jpp"):
-        #     return
-
         # If the channel isn't related to a JIRA ticket, there's nothing else to do
+        channel_name = channel.get("name")
         jira_id = self._extract_jira_id(channel_name)
         if not jira_id:
             return
@@ -203,7 +203,6 @@ class Processor:
             "text": link
         }
         channel_id = channel.get("id")
-        self.logger.info("sending to %s: %s", channel_id, json.dumps(message))
         self.slack_client.post_chat_message(channel_id, message)
 
     def _extract_jira_id(self, channel_name):
@@ -233,3 +232,54 @@ class Processor:
             if name.startswith(prefix):
                 return name[len(prefix):]
         return name
+
+    cute_animals = [
+        "https://i.ytimg.com/vi/opKg3fyqWt4/hqdefault.jpg",
+        "http://cdn2.holytaco.com/wp-content/uploads/images/2009/12/dog-cute-baby.jpg",
+        "http://1.bp.blogspot.com/-NnDHYuLcDbE/ToJ6Rd6Dl5I/AAAAAAAACa4/NzFAKfIV_CQ/s400/golden_retriever_puppies.jpg",
+        "https://pbs.twimg.com/profile_images/497043545505947648/ESngUXG0.jpeg",
+        "https://assets.rbl.ms/10706353/980x.jpg",
+        "http://stuffpoint.com/dogs/image/92783-dogs-cute-puppy.png",
+        "https://groomarts.com/assets/images/_listItem/cute-puppy-1.jpg",
+        "https://pbs.twimg.com/profile_images/568848749611724800/Gv5zUXpu.jpeg",
+        "https://i.ytimg.com/vi/rT_I_GV_oEM/hqdefault.jpg",
+        "http://2.bp.blogspot.com/-GWvh8d_O8QE/UcnF6E7hJpI/AAAAAAAAAF8/VzvEBk3cVsk/s1600/cute+pomeranian+puppies.jpg",
+        "https://i.ytimg.com/vi/Gw_xvtWJ6q0/hqdefault.jpg",
+        "http://3.bp.blogspot.com/-Nlispwf06Ec/UaeSfJ3jXrI/AAAAAAAALl4/UxXUUzEyUdg/s640/cute+puppies+1.jpg",
+        "https://groomarts.com/assets/images/_listItem/cute-puppy-2.jpg",
+        "http://1.bp.blogspot.com/-HpbjntFMqpQ/TyOKIp8s-6I/AAAAAAAAE6Q/kBJdpTqgx80/s1600/Cute-Kissing-Puppies-02.jpg",
+        "https://i.ytimg.com/vi/XhDZGkA1cDk/hqdefault.jpg",
+        "https://pbs.twimg.com/profile_images/555279965194051585/swMjWLLf.jpeg",
+        "https://i.ytimg.com/vi/xTVDBegsddE/hqdefault.jpg",
+        "http://1.bp.blogspot.com/-Jp-_R2WUyVg/USXcf-GJi_I/AAAAAAAAAQ0/7QWew3pXoM8/s400/very+cute+puppies+and+kittens09.jpg",
+        "https://s-media-cache-ak0.pinimg.com/736x/61/ec/ff/61ecff9521848763390c9056ebf87191.jpg",
+        "https://s-media-cache-ak0.pinimg.com/736x/e4/d4/6d/e4d46d3d4e6bec19fecf6cb168cf9375.jpg",
+        "http://4.bp.blogspot.com/_HOCuXB2IC34/SuhaDCdFP_I/AAAAAAAAEhU/1SJlOOuO5og/s400/1+(www.cute-pictures.blogspot.com).jpg",
+        "http://www.cutenessoverflow.com/wp-content/uploads/2016/06/a.jpg",
+        "https://i0.wp.com/www.cutepuppiesnow.com/wp-content/uploads/2017/03/Maltese-Puppy-2.jpg",
+        "http://cuteimages.net/data/460x/2015/9/dog-family-cutest-cuteimages.net.jpg"
+    ]
+
+    def _post_notification_intro_message(self, channel):
+        """
+        Guess an appropriate intro message and send it to the channel
+
+        :param channel: Full channel info
+        """
+
+        # If all else fails, send this message
+        txt = "*I have no idea what this channel is about. So here's a cute animal photo.*\n\n%s" % random.choice(self.cute_animals)
+
+        # What is the purpose of the channel? Fall back to the channel name as a last resort
+        channel_purpose = nested_get(channel, "purpose", "value") or ""
+        words_from_channel_name = self._remove_prefix(channel.get("name")).replace("-", " ")
+
+        # Find photo related to the purpose of the channel
+        if self.image_search:
+            img = self.image_search.random(uncommon_words(channel_purpose + words_from_channel_name))
+            if img:
+                txt = "*This might be appropriate for this channel\n\n%s" % img
+
+        # Send the message
+        channel_id = channel.get("id")
+        self.slack_client.post_chat_text_message(channel_id, txt)

@@ -119,10 +119,10 @@ class TestProcessor(unittest.TestCase):
         expected_message = {
             "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
             "author_name": "Phillip Piper <@UAKA6GKFF>",
-            "fallback": "Phillip Piper just created a new channel  :tada:\n<#CC5D77M5Y|jpp-test-2>\nIts purpose is: TESTING THIS ",
+            "fallback": "Phillip Piper just created a new channel  :tada:\n<#CD1USGKT7|jpp-test-2>\nIts purpose is: TESTING THIS ",
             "pretext": "A new channel has been created  :tada:",
             "text": "TESTING THIS",
-            "title": "<#CC5D77M5Y>"
+            "title": "<#CD1USGKT7>"
         }
         event = CREATE_EVENT
         slack_client = MagicMock()
@@ -170,10 +170,10 @@ class TestProcessor(unittest.TestCase):
         expected_message = {
             "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
             "author_name": "Phillip Piper <@UAKA6GKFF>",
-            "fallback": "Phillip Piper just created a new channel (via renaming) :tada:\n<#CC5D77M5Y|jpp-test-2>\nIts purpose is: TESTING THIS ",
+            "fallback": "Phillip Piper just created a new channel (via renaming) :tada:\n<#CD1USGKT7|jpp-test-2>\nIts purpose is: TESTING THIS ",
             "pretext": "A new channel has been created (via renaming) :tada:",
             "text": "TESTING THIS",
-            "title": "<#CC5D77M5Y>"
+            "title": "<#CD1USGKT7>"
         }
         event = RENAME_EVENT
         slack_client = MagicMock()
@@ -241,8 +241,6 @@ class TestProcessor(unittest.TestCase):
         ]
         for (name, jira_id) in tests:
             self.assertEqual(jira_id, processor._extract_jira_id(name))
-
-
 
 
 if __name__ == '__main__':

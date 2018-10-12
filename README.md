@@ -19,8 +19,11 @@ This app requires a couple of pieces of configuration, supplied via environment 
     export SLACK_BOT_TOKEN="PUT_YOUR_SLACKBOT_TOKEN_HERE"
     export SLACK_VERIFICATION_TOKEN="PUT_YOUR_TOKEN_HERE"
     export TARGET_CHANNEL_ID="#your-channel"
+    export REDIS_URL="PUT_REDIS_CONNECTION_URL_HERE"
 
-`CHANNEL_PREFIXES` is a whitespace separated list of prefixes -- a new channel name must begin with one of these
+`CHANNEL_PREFIXES` is a whitespace separated list of prefixes. *OPTIONAL* 
+
+A new channel name must begin with one of these
 prefixes in order to generate a notification.
 
 For example, if this is set to `"eng- biz- ops-"`, then a new channel `#biz-excel` would be reported, but `#pics-puppies` would not.
@@ -33,6 +36,13 @@ If this is not set or is empty, *all* new channels will generate a notification.
 
 `TARGET_CHANNEL_ID` is the channel name where the notifications will be posted. **REQUIRED**
 
+`REDIS_URL` is the connection string for a redis instance. *OPTIONAL* 
+
+If this is given, the bot will store
+whether or not it has already processed a channel notification (Slack can sometimes sent multiple
+creation events for the same channel). If this is not given, the bot will store this information in
+memory, which is not very reliably since a hosted instance can be restarted at any instance.
+
 ## Slack integrations
 
 This project uses Slack's python api toolkit: <https://github.com/slackapi/python-slack-events-api>
@@ -43,9 +53,10 @@ You will need to follow the instructions given in that project about how to crea
 
 This app can be run locally, via ngrok. But, more normally, it would be hosted somewhere: heroku, zeit, aws, GCE.
 
-It uses Redis to store a small amount of state between runs. The redis instance is currently accessed through `REDIS_URL` environment variable.
+The app is pure python, so it should be easy to host wherever you want.
 
-Apart from the redis dependency, the app is pure python, so it should be easy to host wherever you want.
+I have had a good results using [Zappa](https://github.com/Miserlou/Zappa/tree/master/zappa ) to host the application 
+within AWS Lambda.
 
 ## Local testing
 
