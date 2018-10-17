@@ -16,14 +16,15 @@ class BingImageClient:
 
     def random(self, terms, rating="G", lang="en-US"):
         """
-        Return a random image that matches the given terms
+        Return a random image that matches the given terms, or None if no matches are found
 
         :param terms:
         :param rating:
         :param lang:
         :return:
         """
-        return random.choice(self.search(terms, 50, rating, lang))
+        results = self.search(terms, 50, rating, lang)
+        return random.choice(results) if results else None
 
     def search(self, terms, search_limit=10, rating="G", lang="en-US"):
         """

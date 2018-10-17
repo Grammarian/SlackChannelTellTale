@@ -276,7 +276,8 @@ class Processor:
 
         # Find photo related to the purpose of the channel
         if self.image_search:
-            img = self.image_search.random(uncommon_words(channel_purpose + words_from_channel_name))
+            candidates = "%s %s" % (channel_purpose, words_from_channel_name)
+            img = self.image_search.random(uncommon_words(candidates))
             if img:
                 txt = "*This might be appropriate for this channel\n\n%s" % img
 

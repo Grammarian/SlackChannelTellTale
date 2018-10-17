@@ -632,7 +632,13 @@ common_words = {
     'you',
     'your',
     'yours',
-    'yourself'
+    'yourself',
+    
+    # My own additions
+    "continue",
+    "discuss",
+    "feature",
+    "end"
 }
 
 if __name__ == "__main__":

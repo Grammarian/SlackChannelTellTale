@@ -91,9 +91,9 @@ def slash_handler():
 def ping_handler():
     channel = {
         "id": "CCLUV8FFH",
-        "name": "#fun-star-citizen",
+        "name": "#ftr-spend-dip-end",
         "purpose": {
-            "value": "Discuss all things concerning Star Citizen space simulation game"
+            "value": "Discuss the feature to continue spending on starving adgroups at the end of the day"
         }
     }
     _processor._post_notification_intro_message(channel)
