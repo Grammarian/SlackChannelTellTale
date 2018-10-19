@@ -4,6 +4,7 @@ import random
 import re
 import time
 
+from message_generator import MessageGenerator
 from toolbox import nested_get
 from in_memory_redis import InMemoryRedis
 from uncommon_words import uncommon_words
@@ -158,7 +159,7 @@ class Processor:
         self.logger.info("sending to %s: %s", self.target_channel_id, json.dumps(fancy_message))
 
         # Finally, announce the new channel in the announcement channel
-        self.slack_client.post_chat_message(self.target_channel_id, fancy_message)
+        self.slack_client.post_chat_message(self.target_channel_id, attachment=fancy_message)
 
     def _post_notification(self, event_type, channel):
         """
@@ -172,11 +173,12 @@ class Processor:
         if event_type != "create":
             return
 
+        self._post_notification_jira(channel)
+
         # For testing purposes, let's limit this to just my channels
         if not channel.get("name").startswith("jpp"):
             return
 
-        self._post_notification_jira(channel)
         self._post_notification_intro_message(channel)
 
     def _post_notification_jira(self, channel):
@@ -203,7 +205,7 @@ class Processor:
             "text": link
         }
         channel_id = channel.get("id")
-        self.slack_client.post_chat_message(channel_id, message)
+        self.slack_client.post_chat_message(channel_id, attachment=message)
 
     def _extract_jira_id(self, channel_name):
         """
@@ -233,32 +235,15 @@ class Processor:
                 return name[len(prefix):]
         return name
 
-    cute_animals = [
-        "https://i.ytimg.com/vi/opKg3fyqWt4/hqdefault.jpg",
-        "http://cdn2.holytaco.com/wp-content/uploads/images/2009/12/dog-cute-baby.jpg",
-        "http://1.bp.blogspot.com/-NnDHYuLcDbE/ToJ6Rd6Dl5I/AAAAAAAACa4/NzFAKfIV_CQ/s400/golden_retriever_puppies.jpg",
-        "https://pbs.twimg.com/profile_images/497043545505947648/ESngUXG0.jpeg",
-        "https://assets.rbl.ms/10706353/980x.jpg",
-        "http://stuffpoint.com/dogs/image/92783-dogs-cute-puppy.png",
-        "https://groomarts.com/assets/images/_listItem/cute-puppy-1.jpg",
-        "https://pbs.twimg.com/profile_images/568848749611724800/Gv5zUXpu.jpeg",
-        "https://i.ytimg.com/vi/rT_I_GV_oEM/hqdefault.jpg",
-        "http://2.bp.blogspot.com/-GWvh8d_O8QE/UcnF6E7hJpI/AAAAAAAAAF8/VzvEBk3cVsk/s1600/cute+pomeranian+puppies.jpg",
-        "https://i.ytimg.com/vi/Gw_xvtWJ6q0/hqdefault.jpg",
-        "http://3.bp.blogspot.com/-Nlispwf06Ec/UaeSfJ3jXrI/AAAAAAAALl4/UxXUUzEyUdg/s640/cute+puppies+1.jpg",
-        "https://groomarts.com/assets/images/_listItem/cute-puppy-2.jpg",
-        "http://1.bp.blogspot.com/-HpbjntFMqpQ/TyOKIp8s-6I/AAAAAAAAE6Q/kBJdpTqgx80/s1600/Cute-Kissing-Puppies-02.jpg",
-        "https://i.ytimg.com/vi/XhDZGkA1cDk/hqdefault.jpg",
-        "https://pbs.twimg.com/profile_images/555279965194051585/swMjWLLf.jpeg",
-        "https://i.ytimg.com/vi/xTVDBegsddE/hqdefault.jpg",
-        "http://1.bp.blogspot.com/-Jp-_R2WUyVg/USXcf-GJi_I/AAAAAAAAAQ0/7QWew3pXoM8/s400/very+cute+puppies+and+kittens09.jpg",
-        "https://s-media-cache-ak0.pinimg.com/736x/61/ec/ff/61ecff9521848763390c9056ebf87191.jpg",
-        "https://s-media-cache-ak0.pinimg.com/736x/e4/d4/6d/e4d46d3d4e6bec19fecf6cb168cf9375.jpg",
-        "http://4.bp.blogspot.com/_HOCuXB2IC34/SuhaDCdFP_I/AAAAAAAAEhU/1SJlOOuO5og/s400/1+(www.cute-pictures.blogspot.com).jpg",
-        "http://www.cutenessoverflow.com/wp-content/uploads/2016/06/a.jpg",
-        "https://i0.wp.com/www.cutepuppiesnow.com/wp-content/uploads/2017/03/Maltese-Puppy-2.jpg",
-        "http://cuteimages.net/data/460x/2015/9/dog-family-cutest-cuteimages.net.jpg"
-    ]
+    def _save_channel_state(self, channel_id, channel_state):
+        redis_channel_state_key = "channel-state:%s" % channel_id
+        self.redis_client.set(redis_channel_state_key, json.dumps(channel_state))
+        self.redis_client.expire(redis_channel_state_key, 60 * 60 * 24)
+
+    def _get_channel_state(self, channel_id):
+        redis_channel_state_key = "channel-state:%s" % channel_id
+        channel_state = self.redis_client.get(redis_channel_state_key)
+        return json.loads(channel_state) if channel_state else None
 
     def _post_notification_intro_message(self, channel):
         """
@@ -266,21 +251,61 @@ class Processor:
 
         :param channel: Full channel info
         """
-
-        # If all else fails, send this message
-        txt = "*I have no idea what this channel is about. So here's a cute animal photo.*\n\n%s" % random.choice(self.cute_animals)
-
-        # What is the purpose of the channel? Fall back to the channel name as a last resort
+        # What is the purpose of the channel?
+        # Glean whatever info we can from channel name itself
+        channel_name = channel.get("name")
+        jira_id = self._extract_jira_id(channel_name)
+        if jira_id:
+            channel_name = channel_name.replace(jira_id, "")
+        words_from_channel_name = self._remove_prefix(channel_name).replace("-", " ")
         channel_purpose = nested_get(channel, "purpose", "value") or ""
-        words_from_channel_name = self._remove_prefix(channel.get("name")).replace("-", " ")
+        candidates = "%s %s" % (channel_purpose, words_from_channel_name)
+        search_terms = uncommon_words(candidates)
 
-        # Find photo related to the purpose of the channel
-        if self.image_search:
-            candidates = "%s %s" % (channel_purpose, words_from_channel_name)
-            img = self.image_search.random(uncommon_words(candidates))
-            if img:
-                txt = "*This might be appropriate for this channel\n\n%s" % img
+        generator = MessageGenerator(self.image_search, self.logger)
+        generator.start(search_terms=search_terms)
+        msg = generator.get_msg()
+        if not msg:
+            self.logger.error("generator failed to create message")
+            return
 
         # Send the message
         channel_id = channel.get("id")
-        self.slack_client.post_chat_text_message(channel_id, txt)
+        self.slack_client.post_chat_message(channel_id, text=msg.get("text"), attachment=msg.get("attachment"))
+
+        # Remember the state of the generator so we can use it on the next interaction (if there is one)
+        self._save_channel_state(channel_id, generator.get_state())
+
+    def process_interactive_event(self, event_data):
+        """
+        Handle a button press event from an interactive message.
+
+        If this process takes more than 3 seconds, Slack reports a time out to the user.
+        We might want to spin off the actual calculations onto its own thread
+        """
+        actions = event_data.get("actions")
+        if not len(actions):
+            self.logger.error("payload was missing 'actions'")
+            return
+
+        channel_id = nested_get(event_data, "channel", "id")
+        if not channel_id:
+            self.logger.error("payload was missing 'channel.id'")
+            return
+
+        # Create a message generator and restore it's previous state
+        generator = MessageGenerator(self.image_search, self.logger)
+        generator.set_state(self._get_channel_state(channel_id))
+
+        # Change state depending on what the user clicked
+        clicked_action = actions[0].get("value", "???")
+        generator.transition(clicked_action, event_data)
+
+        # Remember the things we showed to the user
+        self._save_channel_state(channel_id, generator.get_state())
+
+        # Return the message that should be shown
+        msg = generator.get_msg()
+        self.slack_client.update_chat_message(channel_id, event_data["message_ts"], msg.get("text"), msg.get("attachment"))
+
+        return ""

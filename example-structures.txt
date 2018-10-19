@@ -130,3 +130,77 @@ creator_info = {u'headers': {u'Access-Control-Allow-Origin': u'*',
            u'tz_label': u'Australian Eastern Standard Time',
            u'tz_offset': 36000,
            u'updated': 1532934256}}
+
+ interactive_handler.payload =
+ {
+   "attachment_id": "1",
+   "response_url": "https://hooks.slack.com/actions/T0AT6LB9B/458794459043/wstZKFuJkPG6SfMwpespf0gW",
+   "action_ts": "1539847836.670957",
+   "trigger_id": "458281652513.10924691317.0aaf601a20e64db8b45c153221b73dee",
+   "original_message": {
+     "username": "ChannelTellTale",
+     "attachments": [
+       {
+         "callback_id": "poking_around",
+         "fallback": "fallback message",
+         "id": 1,
+         "actions": [
+           {
+             "style": "primary",
+             "name": "game",
+             "text": "Yes, that's great",
+             "value": "yes",
+             "type": "button",
+             "id": "1"
+           },
+           {
+             "style": "",
+             "name": "game",
+             "text": "No, that's not right",
+             "value": "no",
+             "type": "button",
+             "id": "2"
+           },
+           {
+             "style": "danger",
+             "name": "game",
+             "text": "Stop suggesting",
+             "value": "stop",
+             "type": "button",
+             "id": "3"
+           }
+         ],
+         "title": "Is this a good image for this channel?"
+       }
+     ],
+     "text": "I found this image based on these keywords:.\n\n<http://www.cutenessoverflow.com/wp-content/uploads/2016/06/a.jpg>",
+     "ts": "1539847697.000100",
+     "subtype": "bot_message",
+     "type": "message",
+     "bot_id": "BC5PJGEGP"
+   },
+   "actions": [
+     {
+       "type": "button",
+       "name": "game",
+       "value": "yes"
+     }
+   ],
+   "callback_id": "poking_around",
+   "token": "I6SD1P4kCRrXhecjS8xC3y08",
+   "is_app_unfurl": false,
+   "user": {
+     "id": "UAKA6GKFF",
+     "name": "phillip.piper"
+   },
+   "team": {
+     "domain": "thetradedesk",
+     "id": "T0AT6LB9B"
+   },
+   "type": "interactive_message",
+   "message_ts": "1539847697.000100",
+   "channel": {
+     "id": "CCLUV8FFH",
+     "name": "jpp-notify-ttd-aws"
+   }
+ }

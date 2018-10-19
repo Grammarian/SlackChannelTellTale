@@ -16,6 +16,16 @@ class InMemoryRedis:
         """
         return self._cache.get(key)
 
+    def set(self, key, value):
+        """
+        Set the given key to have the given value
+        :param key:
+        :param value:
+        :return: Return true if key is set to the value
+        """
+        self._cache[key] = value
+        return True
+
     def setnx(self, key, value):
         """
         Set the given key to have the given value IFF the given key doesn't already exist.
@@ -30,7 +40,7 @@ class InMemoryRedis:
 
     def expire(self, key, ttl):
         """
-        Set the time to live for the given key.
+        Set the time to live for the given key (in seconds)
 
         :param key:
         :param ttl:

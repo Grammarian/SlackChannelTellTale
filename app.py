@@ -7,12 +7,12 @@ This file handles all the infra-structure of running a Slack bot:
 
 All actual bot logic is in the Processor class
 """
-
+import json
 import os
 import logging
 import redis
 
-from flask import Flask
+from flask import Flask, request, make_response
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 
@@ -79,6 +79,33 @@ def handle_channel_renamed(event_data):
     _processor.process_channel_event("rename", event_data)
 
 
+@app.route("/interactive", methods=["GET", "POST"])
+def interactive_handler():
+    """
+    This is called when a user clicks on a button in an interactive message.
+    """
+    # If a GET request is made, return 404.
+    if request.method == 'GET':
+        return make_response("You still haven't found what you're looking for.", 404)
+
+    payload = request.form["payload"]
+    #_logger.info("interactive_handler event: %s", payload)
+    event_data = json.loads(payload)
+
+    # Make sure the message came from Slack
+    if event_data.get("token") != SLACK_VERIFICATION_TOKEN:
+        return make_response("Bad token.", 404)
+
+    response = _processor.process_interactive_event(event_data)
+    _logger.info("process_interactive_event response: %s", repr(response))
+
+    if response is None:
+        return make_response("Bad response.", 500)
+    if isinstance(response, str):
+        return response
+    return make_response(json.dumps(response), 200, [["Content-type", "application/json; charset=utf-8"]])
+
+
 # -------------------------
 # Normal selector handling
 
@@ -91,13 +118,107 @@ def slash_handler():
 def ping_handler():
     channel = {
         "id": "CCLUV8FFH",
-        "name": "#ftr-spend-dip-end",
+        "name": "tpc-fcap-sync",
         "purpose": {
-            "value": "Discuss the feature to continue spending on starving adgroups at the end of the day"
+            "value": "talk about fcap syncing"
         }
     }
     _processor._post_notification_intro_message(channel)
     return "pong"
+
+
+# ------------------------
+# Playing 
+
+hack_channel = "#jpp-notify-ttd-aws"
+
+
+@app.route("/poke")
+def poke_handler():
+    fancy_message = {
+        "title": "Is this a good image for this channel?",
+        "attachment_type": "default",
+        "callback_id": "choose_photo",
+        "actions": [
+            {
+                "name": "photo",
+                "text": "Yes, that's great",
+                "type": "button",
+                "style": "primary",
+                "value": "yes"
+            },
+            {
+                "name": "photo",
+                "text": "No, show something else",
+                "type": "button",
+                "value": "no"
+            },
+            {
+                "name": "photo",
+                "text": "Stop suggesting",
+                "style": "danger",
+                "type": "button",
+                "value": "stop",
+            }
+        ]
+    }
+    _logger.info("sending message: %s", repr(fancy_message))
+    result = _wrapper.client.api_call("chat.postMessage", channel=hack_channel, unfurl_media=True,
+                                      text="I found this image based on these keywords: 'lesson', 'yeti', 'bidding'.\n\n"
+                                           "http://www.cutenessoverflow.com/wp-content/uploads/2016/06/a.jpg",
+                                      attachments=[fancy_message])
+    _logger.info("result: %s", repr(result))
+    return "sending poke message"
+
+
+@app.route("/poke2")
+def poke2_handler():
+    fancy_message = {
+        "fallback": "fallback message",
+        "pretext": "A new channel has been created :tada: ",
+        "author_name": "joe",
+        "title": "fixed title",
+        "text": "fixed test message",
+        "attachment_type": "default",
+        "callback_id": "poking_around",
+        "actions": [
+            {
+                "name": "game",
+                "text": "Chess",
+                "type": "button",
+                "value": "chess"
+            },
+            {
+                "name": "game",
+                "text": "Falken's Maze",
+                "type": "button",
+                "value": "maze"
+            },
+            {
+                "name": "game",
+                "text": "Thermonuclear War",
+                "style": "danger",
+                "type": "button",
+                "value": "war",
+                "confirm": {
+                    "title": "Are you sure?",
+                    "text": "Wouldn't you prefer a good game of chess?",
+                    "ok_text": "Yes",
+                    "dismiss_text": "No"
+                }
+            }
+        ]
+    }
+    _logger.info("sending message: %s", repr(fancy_message))
+    result = _wrapper.client.api_call("chat.postMessage", channel=hack_channel, unfurl_media=True,
+                                      text="Where does this appear? http://1.bp.blogspot.com/-_RYZa0ulDEA/T5-7nqTJevI/AAAAAAAAAG8/7500g35pxN0/s400/cute+and+funny+animals+pictures+4.jpg",
+                                      attachments=[fancy_message])
+    _logger.info("result: %s", repr(result))
+    return "sending poke message"
+
+
+# end playing
+# ------------
 
 
 def main():
@@ -107,77 +228,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# ------------------------
-# Playing 
-
-# hack_channel = "#jpp-notify-ttd-aws"
-
-# @app.route("/poke")
-# def poke_handler():
-#     fancy_message = {
-#         "fallback": "fallback message",
-#         "pretext": "A new channel has been created :tada:",
-#         "author_name": "joe",
-#         "title": "fixed title",
-#         "text": "fixed test message",
-#         "attachment_type": "default",
-#         "callback_id": "poking_around",
-#         "actions": [
-#             {
-#                 "name": "game",
-#                 "text": "Chess",
-#                 "type": "button",
-#                 "value": "chess"
-#             },
-#             {
-#                 "name": "game",
-#                 "text": "Falken's Maze",
-#                 "type": "button",
-#                 "value": "maze"
-#             },
-#             {
-#                 "name": "game",
-#                 "text": "Thermonuclear War",
-#                 "style": "danger",
-#                 "type": "button",
-#                 "value": "war",
-#                 "confirm": {
-#                     "title": "Are you sure?",
-#                     "text": "Wouldn't you prefer a good game of chess?",
-#                     "ok_text": "Yes",
-#                     "dismiss_text": "No"
-#                 }
-#             }
-#         ]
-#     }
-#     _logger.info("sending message: %s", repr(fancy_message))
-#     slack_client.api_call("chat.postMessage", channel=hack_channel, attachments=[fancy_message])
-#     return "sending poke message"
-
-# @app.route("/interactive", methods=["GET", "POST"])
-# def interactive_handler():
-#         # If a GET request is made, return 404.
-#     if request.method == 'GET':
-#         return make_response("These are not the slackbots you're looking for.", 404)
-
-#     # Parse the request payload into JSON
-#     event_data = json.loads(request.form["payload"])
-#     _logger.info("interactive_handler: %s", repr(event_data))
-
-#     actions = event_data.get("actions")
-#     if actions and len(actions):
-#         action = actions[0]
-#         response_message = {
-#             "fallback": "Button was clicked",
-#             "pretext": "You clicked the '%s' button" % action.get("value", "???"),
-#         }
-#         slack_client.api_call("chat.postMessage", channel=hack_channel, attachments=[response_message])
-#     else:
-#         _logger.info("payload was missing 'actions'")
-
-#     return "finished interactive message"
-
-# end playing
-# ------------
-
