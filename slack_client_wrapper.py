@@ -20,12 +20,14 @@ class SlackClientWrapper:
         self.logger.info("calling 'users.info': %s", user_id)
         return self.client.api_call("users.info", user=user_id)
 
-    def post_chat_message(self, channel_id, text=None, attachment=None):
-        self.logger.info("sending to %s: text=%s, attachment=%s", channel_id, text, json.dumps(attachment))
+    def post_chat_message(self, channel_id, text=None, attachment=None, attachments=None):
+        if attachment and not attachments:
+            attachments = [attachment]
+        self.logger.info("sending to %s: text=%s, attachments=%s", channel_id, text, json.dumps(attachments))
         return self.client.api_call("chat.postMessage", channel=channel_id,
-                                    text=text, attachments=[attachment] if attachment else None)
+                                    text=text, attachments=attachments or None)
 
-    def update_chat_message(self, channel_id, ts, text=None, attachment=None):
-        self.logger.info("updating msg %s/%s: text=%s, attachment=%s", channel_id, ts, text, json.dumps(attachment))
+    def update_chat_message(self, channel_id, ts, text=None, attachments=None):
+        self.logger.info("updating msg %s/%s: text=%s, attachments=%s", channel_id, ts, text, json.dumps(attachments))
         return self.client.api_call("chat.update", channel=channel_id, ts=ts, parse="full", link_names="true",
-                                    text=text, attachments=[attachment] if attachment else [])
+                                    text=text, attachments=attachments or None)

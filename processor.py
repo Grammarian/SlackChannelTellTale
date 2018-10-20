@@ -271,7 +271,7 @@ class Processor:
 
         # Send the message
         channel_id = channel.get("id")
-        self.slack_client.post_chat_message(channel_id, text=msg.get("text"), attachment=msg.get("attachment"))
+        self.slack_client.post_chat_message(channel_id, text=msg.get("text"), attachments=msg.get("attachments"))
 
         # Remember the state of the generator so we can use it on the next interaction (if there is one)
         self._save_channel_state(channel_id, generator.get_state())
@@ -306,6 +306,9 @@ class Processor:
 
         # Return the message that should be shown
         msg = generator.get_msg()
-        self.slack_client.update_chat_message(channel_id, event_data["message_ts"], msg.get("text"), msg.get("attachment"))
+        self.slack_client.update_chat_message(channel_id,
+                                              ts=event_data["message_ts"],
+                                              text=msg.get("text"),
+                                              attachments=msg.get("attachments"))
 
         return ""

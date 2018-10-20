@@ -54,7 +54,7 @@ app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 _wrapper = SlackClientWrapper(SlackClient(SLACK_BOT_TOKEN), _logger)
-_image_search = BingImageClient(BING_API_KEY) if BING_API_KEY else None
+_image_search = BingImageClient(BING_API_KEY, max_size_in_bytes=2*1024*1024) if BING_API_KEY else None
 _processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, image_searcher=_image_search)
 
 # -------------------------
@@ -117,10 +117,10 @@ def slash_handler():
 @app.route("/ping")
 def ping_handler():
     channel = {
-        "id": "CCLUV8FFH",
-        "name": "tpc-fcap-sync",
+        "id": "CDJE76WAF",
+        "name": "jpp-home-automation",
         "purpose": {
-            "value": "talk about fcap syncing"
+            "value": "Discuss home automation using Google Home and Amazon Alexa"
         }
     }
     _processor._post_notification_intro_message(channel)

@@ -1,5 +1,6 @@
 import random
 
+import toolbox
 from toolbox import nested_get
 
 
@@ -82,9 +83,9 @@ COLORS = ["#ffc100", "#c356ea", "#8ff243", "#71aef2", "#71aef2"]
 
 class MessageGenerator:
 
-    def __init__(self, image_searcher, logger):
-        self.logger = logger
+    def __init__(self, image_searcher, logger=None):
         self.image_searcher = image_searcher
+        self.logger = logger or toolbox.null_logger()
         self._state = {}
 
     def start(self, **kwargs):
@@ -97,7 +98,6 @@ class MessageGenerator:
         }
         self._state.update(kwargs)
         self._change_state("initial")
-        self.transition("init")
 
     def get_state(self):
         """
@@ -112,23 +112,65 @@ class MessageGenerator:
         assert state is not None
         self._state = state
 
+    def _get_user_mention(self, event):
+        user = nested_get(event, "user", "name") or "You"
+        # The following works during chat.postMessage, but the user reference isn't being parsed during chat.update
+        # user_id = nested_get(event, "user", "id")
+        # user_name = nested_get(event, "user", "name")
+        # user = "%s <@%s>" % (user_name, user_id) if user_id and user_name else "You"
+        return user
+
     def transition(self, action, event=None):
         """
         Calculate the new state of the generator based on the given action
         """
-        # init, keep, next, stop,
         self.logger.info("executing transition '%s'", action)
 
+        # Sanity check - action is known
+        if action not in {"init", "keep", "next", "stop", "random"}:
+            self.logger.error("Unknown action=%s", action)
+            return None
+
+        # Sanity check -- state machine should not have terminated
         current_state_id = self._state["state_id"]
         if current_state_id == "terminated":
             self.logger.error("No further actions possible. State machine is terminated. Action=%s", action)
             return None
 
+        if action == "init":
+            return self._action_init(event)
         if action == "keep":
-            return self._finish(event)
+            return self._action_keep(event)
+        if action == "next":
+            return self._action_next(event)
         if action == "stop":
-            return self._cancel(event)
+            return self._action_stop(event)
+        if action == "random":
+            return self._action_random(event)
 
+        assert False, "It should be impossible to get here"
+
+    def _action_init(self, event):
+        self._action_next(event)
+
+    def _action_keep(self, event):
+        user = self._get_user_mention(event)
+        image_url = self._state["previous_image_urls"][-1]
+        title = user + " chose this as the photo for this channel :heart:"
+        self._state["msg"] = self._build_msg(title, None, image_url, has_buttons=False)
+        self.terminate()
+
+    def _action_stop(self, event):
+        user = self._get_user_mention(event)
+        title = user + " didn't want to have a photo for this channel :disappointed:"
+        self._state["msg"] = self._build_msg(title, None, None, has_buttons=False)
+        self.terminate()
+
+    def _action_random(self, event):
+        self._change_state("random", event)
+
+    def _action_next(self, event):
+        current_state_id = self._state["state_id"]
         state_defn = state_definitions.get(current_state_id)
         if not state_defn:
             self.logger.error("Unknown state: %s", current_state_id)
@@ -136,11 +178,10 @@ class MessageGenerator:
 
         previous_dialog = self._state["previous_dialog"]
         # If we've exhausted the dialog options, move to our next state
-        included = [x for x in state_defn.dialog_options if x.dialogue not in previous_dialog]
-        if not included:
-            self._change_state(state_defn.next_state)
-            return self.transition("init", event)
-        dialog_option = random.choice(included)
+        possible_dialogues = [x for x in state_defn.dialog_options if x.dialogue not in previous_dialog]
+        if not possible_dialogues:
+            return self._change_state(state_defn.next_state, event)
+        dialog_option = random.choice(possible_dialogues)
 
         # Find a random image that we haven't shown before. If we can't find one, we change state.
         # Some dialog options have a fixed list of possible images, but most use an image search
@@ -150,89 +191,73 @@ class MessageGenerator:
             possible_images = [x for x in dialog_option.image_list if x not in previous_image_urls]
             image_url = random.choice(possible_images) if possible_images else None
         else:
-            image_url = self.image_searcher.random(dialog_option.search or search_terms,
-                                                   max_size_in_bytes=2*1024*104, exclude=previous_image_urls)
+            image_url = self.image_searcher.random(dialog_option.search or search_terms, exclude=previous_image_urls)
         if not image_url:
-            self._change_state(state_defn.no_result_state)
-            return self.transition("init", event)
+            return self._change_state(state_defn.no_result_state, event)
 
         # Setup the template parameters that can be used in the messages
         variables = {
             "search_terms": " ".join(sorted(search_terms)),
             "image_url": image_url,
         }
+        title = dialog_option.dialogue.format(**variables)
+        prompt = dialog_option.prompt
 
         # Modify our state to reflect this transition
         self._state["previous_dialog"].append(dialog_option.dialogue)
         self._state["previous_image_urls"].append(image_url)
-        msg = {
-            "attachment": {
-                "title": dialog_option.dialogue.format(**variables),
-                "attachment_type": "default",
-                "callback_id": "choose_photo",
-                "image_url": image_url,
-                "color": random.choice(COLORS),
-                "actions": [
-                    {
-                        "name": "photo",
-                        "text": "Yes, that's great",
-                        "type": "button",
-                        "style": "primary",
-                        "value": "keep"
-                    },
-                    {
-                        "name": "photo",
-                        "text": "No, show something else",
-                        "type": "button",
-                        "value": "next"
-                    },
-                    {
-                        "name": "photo",
-                        "text": "Stop suggesting",
-                        "style": "danger",
-                        "type": "button",
-                        "value": "stop",
-                    }
-                ]
-            }
+        self._state["msg"] = self._build_msg(title, prompt, image_url, has_next_buttons=(current_state_id != "end"))
+
+    def _build_msg(self, title, prompt, image_url, has_buttons=True, has_next_buttons=True):
+        image_attachment = {
+            "title": title,
+            "attachment_type": "default",
+            "image_url": image_url,
+            "color": random.choice(COLORS),
         }
-        # If we're in a terminal state, don't have a "Show another" button
-        if current_state_id == "end":
-            actions = msg["attachment"]["actions"]
-            actions.pop(1)
-        self._state["msg"] = msg
-
-    def _finish(self, event):
-        user = self._get_user_mention(event)
-        image_url = self._state["previous_image_urls"][-1]
-        self._state["msg"] = {
-            "attachment": {
-                "title": user + " chose this as the photo for this channel :heart:",
-                "attachment_type": "default",
-                "color": random.choice(COLORS),
-                "image_url": image_url,
-            }
+        button_keep = {
+            "name": "photo",
+            "text": "Yes, that's great",
+            "type": "button",
+            "style": "primary",
+            "value": "keep"
         }
-        self.terminate()
-
-    def _get_user_mention(self, event):
-        user = nested_get(event, "user", "name") or "You"
-        # The following is supposed to work, but the user reference isn't being parsed
-        # user_id = nested_get(event, "user", "id")
-        # user_name = nested_get(event, "user", "name")
-        # user = "%s <@%s>" % (user_name, user_id) if user_id and user_name else "You"
-        return user
-
-    def _cancel(self, event):
-        user = self._get_user_mention(event)
-        self._state["msg"] = {
-            "text": user + " chose to not have a photo for this channel :disappointed:"
+        button_next = {
+            "name": "photo",
+            "text": "No, show something else",
+            "type": "button",
+            "value": "next"
         }
-        self.terminate()
+        button_random = {
+            "name": "photo",
+            "text": "Random",
+            "type": "button",
+            "value": "random"
+        }
+        button_stop = {
+            "name": "photo",
+            "text": "Stop suggesting",
+            "style": "danger",
+            "type": "button",
+            "value": "stop",
+        }
 
-    def _change_state(self, new_state_id):
+        buttons_attachment = {
+            "title": prompt,
+            "attachment_type": "default",
+            "callback_id": "choose_photo",
+            "actions": ([button_keep, button_next, button_random, button_stop] if has_next_buttons else
+                        [button_keep, button_stop])
+        }
+
+        return {
+            "attachments": [image_attachment, buttons_attachment] if has_buttons else [image_attachment]
+        }
+
+    def _change_state(self, new_state_id, event=None):
         self.logger.info("changing state from '%s' to '%s", self._state.get("state_id", "<not-set>"), new_state_id)
         self._state["state_id"] = new_state_id
+        self.transition("init", event)
 
     def get_msg(self):
         """
@@ -241,7 +266,7 @@ class MessageGenerator:
         return self._state.get("msg")
 
     def terminate(self):
-        self._change_state("terminated")
+        self._state["state_id"] = "terminated"
 
 
 
