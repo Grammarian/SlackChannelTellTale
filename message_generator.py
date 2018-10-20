@@ -47,30 +47,31 @@ cute_animals = [
 
 state_definitions = {
     "initial": StateDefn("normal", dialog_options=[
-        DialogOption("I found this photo using the following search terms: {search_terms}", "Do you want to keep this picture?")
+        DialogOption("I found this photo using the following search terms: {search_terms}.", "Do you want to keep this picture?")
     ]),
     "no-result": StateDefn("random", no_result_state="random", dialog_options=[
-        DialogOption("I have no idea what this channel is about. So here's a cute animal photo:", search="cute puppies")
+        DialogOption("I have no idea what this channel is about. So here's a cute animal photo.", search="cute puppies")
     ]),
     "random": StateDefn("impatient", dialog_options=[
         DialogOption("How about a nice landscape?", search="beautiful landscape"),
         DialogOption("How about a nice moon scape?", search="beautiful moonscape"),
-        DialogOption("This comes from the weird world of the microscopic?", search="beautiful microscopic"),
+        DialogOption("This comes from the weird world of the microscopic.", search="beautiful microscopic"),
+        DialogOption("I don't think it's relevant but it is pretty", search="most beautiful photos"),
     ]),
     "normal": StateDefn("impatient", dialog_options=[
         DialogOption("What about this one?"),
         DialogOption("I like this one. What about you?"),
-        DialogOption("Let's try something a little different. This one?"),
+        DialogOption("Let's try something a little different."),
         DialogOption("Tough crowd! What about this one?"),
     ]),
     "impatient": StateDefn("final", dialog_options=[
         DialogOption("A bad decision is better than no decision.", search="inspiration quick decision"),
         DialogOption("I found 15 quotes about indecision but I couldn't decide which to show you.", search="demotivational indecision"),
         DialogOption("Having reached the end of good taste, we now reach into modern art.", search="weird modern art"),
-        DialogOption("I thought they couldn't get worse... but I was wrong.", search="terrible modern art"),
+        DialogOption("Modern art can be exceedingly strange.", search="horrible modern art"),
     ]),
     "final": StateDefn("end", dialog_options=[
-        DialogOption("Ok, ok, this is the last attempt. Do you like this one?", search="beautiful geometric designs"),
+        DialogOption("Ok, ok, this is the last attempt.", search="beautiful geometric designs"),
         DialogOption("Will you please make up your mind? I have other things to do.", search="impatient foot tapping"),
     ]),
     "end": StateDefn("terminated", dialog_options=[
@@ -210,7 +211,7 @@ class MessageGenerator:
 
     def _build_msg(self, title, prompt, image_url, has_buttons=True, has_next_buttons=True):
         image_attachment = {
-            "title": title,
+            "pretext": "*" + title + "*",
             "attachment_type": "default",
             "image_url": image_url,
             "color": random.choice(COLORS),
@@ -243,6 +244,7 @@ class MessageGenerator:
         }
 
         buttons_attachment = {
+            "color": random.choice(COLORS),
             "title": prompt,
             "attachment_type": "default",
             "callback_id": "choose_photo",

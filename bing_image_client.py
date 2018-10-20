@@ -16,10 +16,11 @@ class BingImageClient:
 
     SEARCH_URL = "https://api.cognitive.microsoft.com/bing/v7.0/images/search"
 
-    def __init__(self, api_token, logger=None, max_size_in_bytes=0):
+    def __init__(self, api_token, logger=None, max_size_in_bytes=0, filter=None):
         self.api_token = api_token
         self.logger = logger or logging.getLogger("BingImageClient")
         self.max_size_in_bytes = max_size_in_bytes
+        self.filter = filter
 
     def random(self, terms, rating="G", lang="en-US", exclude=[]):
         """
@@ -74,6 +75,9 @@ class BingImageClient:
             return None
         results = response.json().get("value", [])
         self.logger.info("search found %d images", len(results))
+        if len(results) and self.filter:
+            results = [x for x in results if self.filter(x)]
+            self.logger.info("Of those, %d images survived the filter", len(results))
         if len(results) and self.max_size_in_bytes:
             results = [x for x in results if self._content_size(x) < self.max_size_in_bytes]
             self.logger.info("Of those, %d images were smaller than %d bytes", len(results), self.max_size_in_bytes)

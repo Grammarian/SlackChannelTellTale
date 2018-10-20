@@ -49,12 +49,15 @@ _logger.info("REDIS_URL: %s", REDIS_URL)
 _logger.info("JIRA_URL: %s", JIRA_URL)
 _logger.info("BING_API_KEY: %s", BING_API_KEY)
 
+def _ignore_wordpress(x):
+    return "wordpress" not in x.get("contentUrl", "").lower()
+
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 _wrapper = SlackClientWrapper(SlackClient(SLACK_BOT_TOKEN), _logger)
-_image_search = BingImageClient(BING_API_KEY, max_size_in_bytes=2*1024*1024) if BING_API_KEY else None
+_image_search = BingImageClient(BING_API_KEY, max_size_in_bytes=2*1024*1024, filter=_ignore_wordpress) if BING_API_KEY else None
 _processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, image_searcher=_image_search)
 
 # -------------------------
