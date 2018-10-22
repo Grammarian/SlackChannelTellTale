@@ -126,7 +126,7 @@ def ping_handler():
             "value": "Discuss home automation using Google Home and Amazon Alexa"
         }
     }
-    _processor._post_notification_intro_message(channel)
+    _processor._post_notification_photo_suggestion(channel)
     return "pong"
 
 

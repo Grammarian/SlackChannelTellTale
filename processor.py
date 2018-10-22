@@ -292,7 +292,7 @@ class Processor:
         channel_purpose = nested_get(channel, "purpose", "value") or ""
         candidates = "%s %s" % (channel_purpose, words_from_channel_name)
         search_terms = uncommon_words(candidates)
-        return search_terms
+        return ' '.join(sorted(search_terms))
 
     def process_interactive_event(self, event_data):
         """

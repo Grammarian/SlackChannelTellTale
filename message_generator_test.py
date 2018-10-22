@@ -24,7 +24,7 @@ class TestMessageGenerator(unittest.TestCase):
         self.assertIsNotNone(attachments)
         self.assertDictEqual(attachments[0], {
             'color': '#71aef2',
-            'pretext': '*I found this photo using the following search terms: cute dogs very.*',
+            'pretext': '*I found this photo using the following search terms: very cute dogs.*',
             'image_url': 'http://some.com/image.png',
             'attachment_type': 'default'
         })

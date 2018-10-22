@@ -198,7 +198,7 @@ class MessageGenerator:
 
         # Setup the template parameters that can be used in the messages
         variables = {
-            "search_terms": " ".join(sorted(search_terms.split())),
+            "search_terms": search_terms,
             "image_url": image_url,
         }
         title = dialog_option.dialogue.format(**variables)

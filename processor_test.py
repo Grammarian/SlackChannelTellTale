@@ -124,10 +124,10 @@ class TestProcessor(unittest.TestCase):
         slack_client = MagicMock()
         processor = Processor("", ["prefix1-", "bug-"], slack_client)
         tests = [
-            ("channel-name", "this is the channel purpose", ['channel', 'purpose', 'name']),
-            ("prefix1-name", None, ['name']),  # prefixes should be removed
-            ("bug-jira-9999", None, []),  # jira ticket ids should be ignored
-            ("repeated-words", "repeated words should be removed, not repeated", ['repeated', 'words', 'removed']),
+            ("channel-name", "this is the channel purpose", "channel name purpose"),
+            ("prefix1-name", None, 'name'),  # prefixes should be removed
+            ("bug-jira-9999", None, ""),  # jira ticket ids should be ignored
+            ("repeated-words", "repeated words should be removed, not repeated", "removed repeated words"),
         ]
         for (name, purpose, result) in tests:
             terms = processor._extract_search_terms({"name": name, "purpose": {"value": purpose}})
