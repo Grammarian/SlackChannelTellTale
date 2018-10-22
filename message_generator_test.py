@@ -1,23 +1,62 @@
+import random
 import unittest
 from mock import MagicMock
 
-from in_memory_redis import InMemoryRedis
 from message_generator import MessageGenerator
-from processor import Processor
 
 
 class TestMessageGenerator(unittest.TestCase):
+
+    def setUp(self):
+        random.seed(1)  # Make random behave the same each time
+        self.maxDiff = None
 
     def test_initial(self):
         image_searcher = MagicMock()
         image_searcher.random.return_value = "http://some.com/image.png"
         logger = MagicMock()
         generator = MessageGenerator(image_searcher, logger)
-        generator.start(search_terms="cute dogs")
+        generator.start(search_terms="very cute dogs")
         msg = generator.get_msg()
         self.assertIsNotNone(msg)
-        self.assertEqual(msg.get("text"), "I found this photo using the following search terms: cute dogs\n\nhttp://some.com/image.png")
-        self.assertIsNotNone(msg.get("attachment"))
+        self.assertIsNone(msg.get("text"))
+        attachments = msg.get("attachments")
+        self.assertIsNotNone(attachments)
+        self.assertDictEqual(attachments[0], {
+            'color': '#71aef2',
+            'pretext': '*I found this photo using the following search terms: cute dogs very.*',
+            'image_url': 'http://some.com/image.png',
+            'attachment_type': 'default'
+        })
+        self.assertDictEqual(attachments[1], {
+            'color': '#71aef2',
+            'title': 'Do you want to keep this picture?',
+            'callback_id': 'choose_photo',
+            'attachment_type': 'default',
+            'actions': [{
+                'text': "Yes, that's great",
+                'style': 'primary',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'keep'
+            }, {
+                'text': 'No, show something else',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'next'
+            }, {
+                'text': 'Random',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'random'
+            }, {
+                'text': 'Stop suggesting',
+                'style': 'danger',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'stop'
+            }],
+        })
 
     def test_initial_not_found(self):
         def mock_random(terms, rating="G", lang="en-US", exclude=[]):
@@ -29,8 +68,44 @@ class TestMessageGenerator(unittest.TestCase):
         generator.start(search_terms="particle physics")
         msg = generator.get_msg()
         self.assertIsNotNone(msg)
-        self.assertEqual(msg.get("text"), "I have no idea what this channel is about. So here's a cute animal photo:\n\nhttp://cute.com/animal")
-        self.assertIsNotNone(msg.get("attachment"))
+        self.assertIsNone(msg.get("text"))
+        attachments = msg.get("attachments")
+        self.assertIsNotNone(attachments)
+        self.assertDictEqual(attachments[0], {
+            'color': '#71aef2',
+            'pretext': "*I have no idea what this channel is about. So here's a cute animal photo.*",
+            'image_url': 'http://cute.com/animal',
+            'attachment_type': 'default'
+        })
+        self.assertDictEqual(attachments[1], {
+            'color': '#c356ea',
+            'title': 'Keep this one?',
+            'callback_id': 'choose_photo',
+            'attachment_type': 'default',
+            'actions': [{
+                'text': "Yes, that's great",
+                'style': 'primary',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'keep'
+            }, {
+                'text': 'No, show something else',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'next'
+            }, {
+                'text': 'Random',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'random'
+            }, {
+                'text': 'Stop suggesting',
+                'style': 'danger',
+                'type': 'button',
+                'name': 'photo',
+                'value': 'stop'
+            }],
+        })
 
     def test_action_keep(self):
         image_searcher = MagicMock()
@@ -41,26 +116,15 @@ class TestMessageGenerator(unittest.TestCase):
         generator.transition("keep")
         msg = generator.get_msg()
         self.assertIsNotNone(msg)
-        self.assertEqual(msg.get("text"),
-                         "You chose this photo as the photo for this channel :heart:\n\nhttp://some.com/image.png")
-        self.assertIsNone(msg.get("attachment"))
-
-    # def test_jira_id_extraction(self):
-    #     slack_client = MagicMock()
-    #     processor = Processor("target", ["prefix1-", "something2_", "bug-"], slack_client)
-    #     tests = [
-    #         ("prefix1-not-jira-issue", None),
-    #         ("prefix1-some-text-and-a-number-9999-like-this", None),  # Jira id has to be immediately after prefix
-    #         ("prefix1-number-9999-like-this", "number-9999"),
-    #         ("bug-xyz-1234", "xyz-1234"),
-    #         ("bug-X1-01234", "X1-01234"),
-    #         ("bug-X-1", None),  # Project prefix has two have at least two characters
-    #         ("prefix1-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-1234", None),  # Just..no
-    #         ("prefix1-IM-1234-some-description", "IM-1234"),
-    #         ("something2_IM-1234-some-description", "IM-1234"),
-    #     ]
-    #     for (name, jira_id) in tests:
-    #         self.assertEqual(jira_id, processor._extract_jira_id(name))
+        self.assertIsNone(msg.get("text"))
+        attachments = msg.get("attachments")
+        self.assertIsNotNone(attachments)
+        self.assertDictEqual(attachments[0], {
+            'color': '#c356ea',
+            'pretext': "*You chose this as the photo for this channel :heart:*",
+            'image_url': 'http://some.com/image.png',
+            'attachment_type': 'default'
+        })
 
 
 if __name__ == '__main__':

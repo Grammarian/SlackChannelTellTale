@@ -159,7 +159,7 @@ class Processor:
         self.logger.info("sending to %s: %s", self.target_channel_id, json.dumps(fancy_message))
 
         # Finally, announce the new channel in the announcement channel
-        self.slack_client.post_chat_message(self.target_channel_id, attachment=fancy_message)
+        self.slack_client.post_chat_message(self.target_channel_id, None, [fancy_message])
 
     def _post_notification(self, event_type, channel):
         """
@@ -179,7 +179,7 @@ class Processor:
         if not channel.get("name").startswith("jpp"):
             return
 
-        self._post_notification_intro_message(channel)
+        self._post_notification_photo_suggestion(channel)
 
     def _post_notification_jira(self, channel):
         """
@@ -205,7 +205,7 @@ class Processor:
             "text": link
         }
         channel_id = channel.get("id")
-        self.slack_client.post_chat_message(channel_id, attachment=message)
+        self.slack_client.post_chat_message(channel_id, None, [message])
 
     def _extract_jira_id(self, channel_name):
         """
@@ -238,29 +238,26 @@ class Processor:
     def _save_channel_state(self, channel_id, channel_state):
         redis_channel_state_key = "channel-state:%s" % channel_id
         self.redis_client.set(redis_channel_state_key, json.dumps(channel_state))
-        self.redis_client.expire(redis_channel_state_key, 60 * 60 * 24)
+        self.redis_client.expire(redis_channel_state_key, 60 * 60 * 24)  # only keep this info for 24 hours
 
     def _get_channel_state(self, channel_id):
         redis_channel_state_key = "channel-state:%s" % channel_id
         channel_state = self.redis_client.get(redis_channel_state_key)
         return json.loads(channel_state) if channel_state else None
 
-    def _post_notification_intro_message(self, channel):
+    def _post_notification_photo_suggestion(self, channel):
         """
         Guess an appropriate intro message and send it to the channel
 
         :param channel: Full channel info
         """
+        # If we don't have an image searcher, we can't suggest photos
+        if not self.image_search:
+            return
+
         # What is the purpose of the channel?
         # Glean whatever info we can from channel name itself
-        channel_name = channel.get("name")
-        jira_id = self._extract_jira_id(channel_name)
-        if jira_id:
-            channel_name = channel_name.replace(jira_id, "")
-        words_from_channel_name = self._remove_prefix(channel_name).replace("-", " ")
-        channel_purpose = nested_get(channel, "purpose", "value") or ""
-        candidates = "%s %s" % (channel_purpose, words_from_channel_name)
-        search_terms = uncommon_words(candidates)
+        search_terms = self._extract_search_terms(channel)
 
         generator = MessageGenerator(self.image_search, self.logger)
         generator.start(search_terms=search_terms)
@@ -275,6 +272,27 @@ class Processor:
 
         # Remember the state of the generator so we can use it on the next interaction (if there is one)
         self._save_channel_state(channel_id, generator.get_state())
+
+    def _extract_search_terms(self, channel):
+        """
+        From the given channel info, find some search terms to help find appropriate images
+        """
+        # Glean whatever info we can from channel name itself
+        channel_name = channel.get("name")
+
+        # If there's a jira ticket id in the name, ignore it as a search term
+        jira_id = self._extract_jira_id(channel_name)
+        if jira_id:
+            channel_name = channel_name.replace(jira_id, "")
+
+        # The prefix part of the channel name is not useful for searches
+        words_from_channel_name = self._remove_prefix(channel_name).replace("-", " ")
+
+        # Extract unusual words from the channel's purpose
+        channel_purpose = nested_get(channel, "purpose", "value") or ""
+        candidates = "%s %s" % (channel_purpose, words_from_channel_name)
+        search_terms = uncommon_words(candidates)
+        return search_terms
 
     def process_interactive_event(self, event_data):
         """

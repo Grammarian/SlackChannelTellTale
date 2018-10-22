@@ -1,3 +1,4 @@
+import random
 import unittest
 from mock import MagicMock
 
@@ -115,6 +116,23 @@ USER_INFO_SUCCESS = {
 
 class TestProcessor(unittest.TestCase):
 
+    def setUp(self):
+        random.seed(1)  # Make random behave the same each time
+        self.maxDiff = None
+
+    def test_extract_search_terms(self):
+        slack_client = MagicMock()
+        processor = Processor("", ["prefix1-", "bug-"], slack_client)
+        tests = [
+            ("channel-name", "this is the channel purpose", ['channel', 'purpose', 'name']),
+            ("prefix1-name", None, ['name']),  # prefixes should be removed
+            ("bug-jira-9999", None, []),  # jira ticket ids should be ignored
+            ("repeated-words", "repeated words should be removed, not repeated", ['repeated', 'words', 'removed']),
+        ]
+        for (name, purpose, result) in tests:
+            terms = processor._extract_search_terms({"name": name, "purpose": {"value": purpose}})
+            self.assertEqual(result, terms)
+
     def test_create(self):
         expected_message = {
             "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
@@ -138,10 +156,12 @@ class TestProcessor(unittest.TestCase):
         slack_client.channel_info.assert_called_with("CD1USGKT7")
         slack_client.user_info.assert_called_with("UAKA6GKFF")
         self.assertTrue(slack_client.post_chat_message.called)
-        ((posted_channel, posted_message), _) = slack_client.post_chat_message.call_args
+        ((posted_channel, posted_text, posted_attachments), _) = slack_client.post_chat_message.call_args
         self.assertEqual(target_channel, posted_channel)
-        del posted_message['color']  # the color of the message is random and can't be tested
-        self.assertDictEqual(posted_message, expected_message)
+        self.assertEqual(1, len(posted_attachments))
+        attachment = posted_attachments[0]
+        del attachment['color']  # the color of the message is random and can't be tested
+        self.assertDictEqual(attachment, expected_message)
 
     def test_create_post_notify(self):
         expected_message = {
@@ -161,10 +181,12 @@ class TestProcessor(unittest.TestCase):
 
         self.assertFalse(logger.error.called)
         self.assertEqual(2, slack_client.post_chat_message.call_count)
-        ((posted_channel, posted_message), _) = slack_client.post_chat_message.call_args
+        ((posted_channel, posted_text, posted_attachments), _) = slack_client.post_chat_message.call_args
         self.assertEqual("CD1USGKT7", posted_channel)
-        del posted_message['color']  # the color of the message is random and can't be tested
-        self.assertDictEqual(posted_message, expected_message)
+        self.assertEqual(1, len(posted_attachments))
+        attachment = posted_attachments[0]
+        del attachment['color']  # the color of the message is random and can't be tested
+        self.assertDictEqual(attachment, expected_message)
 
     def test_rename(self):
         expected_message = {
@@ -189,10 +211,12 @@ class TestProcessor(unittest.TestCase):
         slack_client.channel_info.assert_called_with("CD1USGKT7")
         slack_client.user_info.assert_called_with("UAKA6GKFF")
         self.assertTrue(slack_client.post_chat_message.called)
-        ((posted_channel, posted_message), _) = slack_client.post_chat_message.call_args
+        ((posted_channel, posted_text, posted_attachments), _) = slack_client.post_chat_message.call_args
         self.assertEqual(target_channel, posted_channel)
-        del posted_message['color']  # the color of the message is random and can't be tested
-        self.assertDictEqual(posted_message, expected_message)
+        self.assertEqual(1, len(posted_attachments))
+        attachment = posted_attachments[0]
+        del attachment['color']  # the color of the message is random and can't be tested
+        self.assertDictEqual(attachment, expected_message)
 
     def test_ignore_non_matching_names(self):
         event = RENAME_EVENT
