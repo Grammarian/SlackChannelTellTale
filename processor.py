@@ -176,8 +176,8 @@ class Processor:
         self._post_notification_jira(channel)
 
         # For testing purposes, let's limit this to just my channels
-        if not channel.get("name").startswith("jpp"):
-            return
+        # if not channel.get("name").startswith("jpp"):
+        #     return
 
         self._post_notification_photo_suggestion(channel)
 

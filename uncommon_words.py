@@ -1,8 +1,8 @@
 """
 This module provides a single function to calculate uncommon words
 
->>> uncommon_words("Google has decided to drop its long-time mantra of 'Do no evil'")
-['google', 'decided', 'drop', 'mantra', 'evil']
+>>> uncommon_words(u"Google has decided to drop its long-time mantra of 'Do no evil' ")
+[u'google', u'decided', u'drop', u'mantra', u'evil']
 >>> uncommon_words("Another very interesting use case is to convert the entire string to lower case except the first character")
 ['interesting', 'convert', 'entire', 'string', 'lower', 'character']
 >>> uncommon_words("Creative Troubleshooting Suite: To outline the creative issues we often troubleshoot and create testing suite to help mitigate this troubleshooting")
@@ -21,7 +21,7 @@ def uncommon_words(s, ignore=[]):
     """
     Return the collection of uncommon words in the given string.
     """
-    without_punctuation = s.replace("-", " ").translate(None, string.punctuation)
+    without_punctuation = "".join([x for x in s.replace("-", " ") if x not in string.punctuation])
     unique_lowercase_words = toolbox.ordered_distinct(without_punctuation.lower().split())
     other_words_to_ignore = set(ignore)
     return [x for x in unique_lowercase_words if x not in common_words and x not in other_words_to_ignore]
