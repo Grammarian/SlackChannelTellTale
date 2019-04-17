@@ -235,16 +235,6 @@ class Processor:
                 return name[len(prefix):]
         return name
 
-    def _save_channel_state(self, channel_id, channel_state):
-        redis_channel_state_key = "channel-state:%s" % channel_id
-        self.redis_client.set(redis_channel_state_key, json.dumps(channel_state))
-        self.redis_client.expire(redis_channel_state_key, 60 * 60 * 24)  # only keep this info for 24 hours
-
-    def _get_channel_state(self, channel_id):
-        redis_channel_state_key = "channel-state:%s" % channel_id
-        channel_state = self.redis_client.get(redis_channel_state_key)
-        return json.loads(channel_state) if channel_state else None
-
     def _post_notification_photo_suggestion(self, channel):
         """
         Guess an appropriate intro message and send it to the channel
@@ -256,7 +246,6 @@ class Processor:
             return
 
         # What is the purpose of the channel?
-        # Glean whatever info we can from channel name itself
         search_terms = self._extract_search_terms(channel)
 
         generator = MessageGenerator(self.image_search, self.logger)
@@ -268,10 +257,10 @@ class Processor:
 
         # Send the message
         channel_id = channel.get("id")
-        self.slack_client.post_chat_message(channel_id, text=msg.get("text"), attachments=msg.get("attachments"))
+        self.slack_client.post_chat_message(channel_id, msg.get("text"), msg.get("attachments"))
 
         # Remember the state of the generator so we can use it on the next interaction (if there is one)
-        self._save_channel_state(channel_id, generator.get_state())
+        self._save_generator_state(channel_id, generator.get_state())
 
     def _extract_search_terms(self, channel):
         """
@@ -313,14 +302,14 @@ class Processor:
 
         # Create a message generator and restore it's previous state
         generator = MessageGenerator(self.image_search, self.logger)
-        generator.set_state(self._get_channel_state(channel_id))
+        generator.set_state(self._get_generator_state(channel_id))
 
         # Change state depending on what the user clicked
         clicked_action = actions[0].get("value", "???")
         generator.transition(clicked_action, event_data)
 
         # Remember the things we showed to the user
-        self._save_channel_state(channel_id, generator.get_state())
+        self._save_generator_state(channel_id, generator.get_state())
 
         # Return the message that should be shown
         msg = generator.get_msg()
@@ -328,5 +317,14 @@ class Processor:
                                               ts=event_data["message_ts"],
                                               text=msg.get("text"),
                                               attachments=msg.get("attachments"))
-
         return ""
+
+    def _save_generator_state(self, channel_id, channel_state):
+        redis_generator_state_key = "generator-state:%s" % channel_id
+        self.redis_client.set(redis_generator_state_key, json.dumps(channel_state))
+        self.redis_client.expire(redis_generator_state_key, 60 * 60 * 24)  # only keep this info for 24 hours
+
+    def _get_generator_state(self, channel_id):
+        redis_generator_state_key = "generator-state:%s" % channel_id
+        channel_state = self.redis_client.get(redis_generator_state_key)
+        return json.loads(channel_state) if channel_state else None

@@ -5,10 +5,11 @@ from toolbox import nested_get
 
 
 class StateDefn:
-    def __init__(self, next_state=None, no_result_state=None, dialog_options=[]):
+    def __init__(self, next_state=None, no_result_state=None, dialog_options=None):
         self.next_state = next_state
         self.no_result_state = no_result_state or "no-result"
-        self.dialog_options = dialog_options
+        self.dialog_options = dialog_options or []
+
 
 class DialogOption:
     def __init__(self, dialogue, prompt=None, search=None, image_list=None):
