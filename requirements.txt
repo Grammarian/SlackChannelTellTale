@@ -50,7 +50,7 @@ troposphere==2.3.1
 Unidecode==1.0.22
 urllib3==1.23
 websocket-client==0.48.0
-Werkzeug==0.14.1
+Werkzeug==0.15.3
 wrapt==1.10.11
 wsgi-request-logger==0.4.6
 zappa==0.48.2
