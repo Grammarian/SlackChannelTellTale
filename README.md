@@ -69,3 +69,18 @@ When it is up and running, you can send messages to it. The `test-messages` dire
     > curl -s --header "Content-Type: application/json" --data @test-messages/channel-create-good.json http://localhost:3000/slack/events
 
 You will have to put your `SLACK_VERIFICATION_TOKEN` into the json files, or your bot will reject them.
+
+# Zappa usages
+
+Activate the virtual environment:
+
+    > . .\venv\Scripts\activate
+    
+To see the production logs:
+
+    (venv) > zappa tail prod
+    
+To push a new version:
+
+    (venv) > zappa update prod
+    

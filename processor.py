@@ -1,13 +1,13 @@
+import datetime
 import json
 import logging
 import random
 import re
 import time
 
-from message_generator import MessageGenerator
-from toolbox import nested_get
 from in_memory_redis import InMemoryRedis
-from uncommon_words import uncommon_words
+from toolbox import nested_get
+import clippy_messages
 
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff",
           "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
@@ -18,13 +18,12 @@ class Processor:
     This class processes slack events and sends notification messages as required
     """
 
-    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None, image_searcher=None):
+    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None):
         self.target_channel_id = target_channel_id
         self.channel_prefixes = channel_prefixes
         self.slack_client = slack_client
         self.redis_client = redis_client or InMemoryRedis()
         self.logger = logger or logging.getLogger("Processor")
-        self.image_search = image_searcher
 
         # Make sure that, if there is a jira prefix, it ends with "/jira/browse/"
         self.jira_prefix = jira if not jira or jira.endswith("/jira/browse/") else jira + "/jira/browse/"
@@ -102,7 +101,7 @@ class Processor:
         # Try hard to fetch the full info about the channel
         channel_info = self.insistent_get_channel_info(channel_id)
         if not channel_info:
-            self.logger.error("ignored.... failed to get information about the channel (%s/%s)", channel_id, channel_name)
+            self.logger.error("ignored.... failed to get information about channel (%s/%s)", channel_id, channel_name)
             return
 
         # Fetch the full info about the creator of the channel
@@ -119,7 +118,7 @@ class Processor:
         self._send_pretty_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
 
         # Do any post notification processing
-        self._post_notification(event_type, channel_info.get("channel"))
+        self._post_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
 
     # noinspection PyPep8Naming
     def _send_pretty_notification(self, event_type, channel, creator):
@@ -156,12 +155,13 @@ class Processor:
         }
         # Make a nicely format notification from the above template
         fancy_message = {key: value.format(**values) for (key, value) in MESSAGE_TEMPLATE.items()}
-        self.logger.info("sending to %s: %s", self.target_channel_id, json.dumps(fancy_message))
+        target_channel = "jpp-notify-ttd-aws" if channel.get("name").startswith("jpp") else self.target_channel_id
+        self.logger.info("sending to %s: %s", target_channel, json.dumps(fancy_message))
 
         # Finally, announce the new channel in the announcement channel
-        self.slack_client.post_chat_message(self.target_channel_id, None, [fancy_message])
+        self.slack_client.post_chat_message(target_channel, None, [fancy_message])
 
-    def _post_notification(self, event_type, channel):
+    def _post_notification(self, event_type, channel, user):
         """
         Do any post processing required. This can include setting the channel's purpose, topic, or
         sending an intro message to the channel.
@@ -175,11 +175,43 @@ class Processor:
 
         self._post_notification_jira(channel)
 
-        # For testing purposes, let's limit this to just my channels
-        # if not channel.get("name").startswith("jpp"):
-        #     return
+        self._april_fools_day(channel, user)
 
-        self._post_notification_photo_suggestion(channel)
+    def _april_fools_day(self, channel, user):
+
+        # For testing purposes, let's limit this to just my channels
+        if not channel.get("name").startswith("jpp"):
+            return
+
+        # Calculate the users local time
+        tz_offset = user["tz_offset"]
+        user_local_time = datetime.datetime.utcnow() + datetime.timedelta(seconds=tz_offset)
+        # Is it the right day?
+        target_date = datetime.date(2020, 04, 01)
+        if user_local_time.date() != target_date:
+            self.logger.info("Not the right day. Should be %s, but is %s" % (target_date, user_local_time))
+            # return
+
+        # Have we annoyed this user already?
+        creator_id = channel.get("creator")
+        if self._get_user_feature(creator_id, "aprilfool"):
+            self.logger.info("We've already annoyed user '%s'. Skip them now" % creator_id)
+            return
+
+        channel_id = channel.get("id")
+        blocks = random.choice([clippy_messages.NEW_GROUP, clippy_messages.NEW_THREAD])
+        self.slack_client.post_chat_message(channel_id, None, blocks=blocks)
+        self.logger.info("We annoyed user %s !" % creator_id)
+
+    def _set_user_feature(self, user_id, feature_id):
+        redis_key = "user-feature:%s:%s" % (user_id, feature_id)
+        self.redis_client.set(redis_key, "true")
+        self.redis_client.expire(redis_key, 60 * 60 * 24)  # only keep this info for 24 hours
+
+    def _get_user_feature(self, user_id, feature_id):
+        redis_key = "user-feature:%s:%s" % (user_id, feature_id)
+        result = self.redis_client.get(redis_key)
+        return True if result else False
 
     def _post_notification_jira(self, channel):
         """
@@ -235,65 +267,6 @@ class Processor:
                 return name[len(prefix):]
         return name
 
-    def _save_channel_state(self, channel_id, channel_state):
-        redis_channel_state_key = "channel-state:%s" % channel_id
-        self.redis_client.set(redis_channel_state_key, json.dumps(channel_state))
-        self.redis_client.expire(redis_channel_state_key, 60 * 60 * 24)  # only keep this info for 24 hours
-
-    def _get_channel_state(self, channel_id):
-        redis_channel_state_key = "channel-state:%s" % channel_id
-        channel_state = self.redis_client.get(redis_channel_state_key)
-        return json.loads(channel_state) if channel_state else None
-
-    def _post_notification_photo_suggestion(self, channel):
-        """
-        Guess an appropriate intro message and send it to the channel
-
-        :param channel: Full channel info
-        """
-        # If we don't have an image searcher, we can't suggest photos
-        if not self.image_search:
-            return
-
-        # What is the purpose of the channel?
-        # Glean whatever info we can from channel name itself
-        search_terms = self._extract_search_terms(channel)
-
-        generator = MessageGenerator(self.image_search, self.logger)
-        generator.start(search_terms=search_terms)
-        msg = generator.get_msg()
-        if not msg:
-            self.logger.error("generator failed to create message")
-            return
-
-        # Send the message
-        channel_id = channel.get("id")
-        self.slack_client.post_chat_message(channel_id, text=msg.get("text"), attachments=msg.get("attachments"))
-
-        # Remember the state of the generator so we can use it on the next interaction (if there is one)
-        self._save_channel_state(channel_id, generator.get_state())
-
-    def _extract_search_terms(self, channel):
-        """
-        From the given channel info, find some search terms to help find appropriate images
-        """
-        # Glean whatever info we can from channel name itself
-        channel_name = channel.get("name")
-
-        # If there's a jira ticket id in the name, ignore it as a search term
-        jira_id = self._extract_jira_id(channel_name)
-        if jira_id:
-            channel_name = channel_name.replace(jira_id, "")
-
-        # The prefix part of the channel name is not useful for searches
-        words_from_channel_name = self._remove_prefix(channel_name).replace("-", " ")
-
-        # Extract unusual words from the channel's purpose
-        channel_purpose = nested_get(channel, "purpose", "value") or ""
-        candidates = "%s %s" % (channel_purpose, words_from_channel_name)
-        search_terms = uncommon_words(candidates)
-        return ' '.join(sorted(search_terms))
-
     def process_interactive_event(self, event_data):
         """
         Handle a button press event from an interactive message.
@@ -311,22 +284,16 @@ class Processor:
             self.logger.error("payload was missing 'channel.id'")
             return
 
-        # Create a message generator and restore it's previous state
-        generator = MessageGenerator(self.image_search, self.logger)
-        generator.set_state(self._get_channel_state(channel_id))
-
-        # Change state depending on what the user clicked
+        message_ts = nested_get(event_data, "container", "message_ts")
         clicked_action = actions[0].get("value", "???")
-        generator.transition(clicked_action, event_data)
+        self.logger.info("interactive. clicked_action=%s" % clicked_action)
 
-        # Remember the things we showed to the user
-        self._save_channel_state(channel_id, generator.get_state())
+        response = clippy_messages.RESPONSES.get(clicked_action, "unknown action: %s" % clicked_action)
+        self.slack_client.update_chat_message(channel_id, ts=message_ts, blocks=response)
 
-        # Return the message that should be shown
-        msg = generator.get_msg()
-        self.slack_client.update_chat_message(channel_id,
-                                              ts=event_data["message_ts"],
-                                              text=msg.get("text"),
-                                              attachments=msg.get("attachments"))
+        if clicked_action == "click_enough":
+            user_id = nested_get(event_data, "user", "id")
+            self._set_user_feature(user_id, "aprilfool")
+            self.logger.info("user(%s/%s) has had enough" % (user_id, nested_get(event_data, "user", "name") ))
 
         return ""

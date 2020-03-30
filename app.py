@@ -16,7 +16,6 @@ from flask import Flask, request, make_response
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
 
-from bing_image_client import BingImageClient
 from processor import Processor
 from slack_client_wrapper import SlackClientWrapper
 
@@ -32,13 +31,12 @@ TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split()  # whitespace separated list
 REDIS_URL = os.getenv("REDIS_URL")
 JIRA_URL = os.getenv("JIRA_URL")  # e.g. https://atlassian.mycompany.com
-BING_API_KEY = os.getenv("BING_API_KEY")
 
 # Initialize logging
 FORMAT = "%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INFO)
 _logger = logging.getLogger(APP_NAME)
- 
+
 # Log some settings
 _logger.info("STARTING %s", APP_NAME)
 _logger.info("DEBUG: %s", DEBUG)
@@ -47,18 +45,14 @@ _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
 _logger.info("TARGET_CHANNEL_ID: %s", TARGET_CHANNEL_ID)
 _logger.info("REDIS_URL: %s", REDIS_URL)
 _logger.info("JIRA_URL: %s", JIRA_URL)
-_logger.info("BING_API_KEY: %s", BING_API_KEY)
-
-def _ignore_wordpress(x):
-    return "wordpress" not in x.get("contentUrl", "").lower()
 
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 _wrapper = SlackClientWrapper(SlackClient(SLACK_BOT_TOKEN), _logger)
-_image_search = BingImageClient(BING_API_KEY, max_size_in_bytes=2*1024*1024, filter=_ignore_wordpress) if BING_API_KEY else None
-_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, image_searcher=_image_search)
+_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL)
+
 
 # -------------------------
 # Slack event handling
@@ -69,7 +63,7 @@ def handle_channel_created(event_data):
     """
     Event callback when a new channel is created
     """
-    _logger.info("received channel_rename event: %s", repr(event_data))
+    _logger.info("received channel_created event: %s", json.dumps(event_data))
     _processor.process_channel_event("create", event_data)
 
 
@@ -78,8 +72,18 @@ def handle_channel_renamed(event_data):
     """
     Event callback when a channel is renamed
     """
-    _logger.info("received channel_rename event: %s", repr(event_data))
+    _logger.info("received channel_rename event: %s", json.dumps(event_data))
     _processor.process_channel_event("rename", event_data)
+
+
+# @slack_events_adapter.on("message.channels")
+# @slack_events_adapter.on("message")
+# def handle_channel_message(event_data):
+#     """
+#     Event callback when a message is posted to a channel
+#     """
+#     _logger.info("received message.channels event: %s", json.dumps(event_data))
+#     # _processor.process_channel_event("rename", event_data)
 
 
 @app.route("/interactive", methods=["GET", "POST"])
@@ -91,14 +95,13 @@ def interactive_handler():
     if request.method == 'GET':
         return make_response("You still haven't found what you're looking for.", 404)
 
-    payload = request.form["payload"]
-    #_logger.info("interactive_handler event: %s", payload)
-    event_data = json.loads(payload)
+    event_data = json.loads(request.form["payload"])
 
     # Make sure the message came from Slack
     if event_data.get("token") != SLACK_VERIFICATION_TOKEN:
         return make_response("Bad token.", 404)
 
+    _logger.info("received interactive event: %s", repr(event_data))
     response = _processor.process_interactive_event(event_data)
     _logger.info("process_interactive_event response: %s", repr(response))
 
@@ -120,13 +123,14 @@ def slash_handler():
 @app.route("/ping")
 def ping_handler():
     channel = {
-        "id": "CDJE76WAF",
+        "id": "CCLUV8FFH",
+        "creator": "acs",
         "name": "jpp-home-automation",
         "purpose": {
             "value": "Discuss home automation using Google Home and Amazon Alexa"
         }
     }
-    _processor._post_notification_photo_suggestion(channel)
+    _processor._april_fools_day(channel)
     return "pong"
 
 
@@ -176,46 +180,28 @@ def poke_handler():
 
 @app.route("/poke2")
 def poke2_handler():
-    fancy_message = {
-        "fallback": "fallback message",
-        "pretext": "A new channel has been created :tada: ",
-        "author_name": "joe",
-        "title": "fixed title",
-        "text": "fixed test message",
-        "attachment_type": "default",
-        "callback_id": "poking_around",
-        "actions": [
-            {
-                "name": "game",
-                "text": "Chess",
-                "type": "button",
-                "value": "chess"
-            },
-            {
-                "name": "game",
-                "text": "Falken's Maze",
-                "type": "button",
-                "value": "maze"
-            },
-            {
-                "name": "game",
-                "text": "Thermonuclear War",
-                "style": "danger",
-                "type": "button",
-                "value": "war",
-                "confirm": {
-                    "title": "Are you sure?",
-                    "text": "Wouldn't you prefer a good game of chess?",
-                    "ok_text": "Yes",
-                    "dismiss_text": "No"
-                }
+    fancy_message = [
+        {
+            "type": "image",
+            "image_url": "https://tenor.com/view/clip-windows-microsoft-agent-gif-11209432",
+            "alt_text": "Example Image"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "plain_text",
+                "text": "Hello!",
+                "emoji": True
             }
-        ]
-    }
+        }
+    ]
     _logger.info("sending message: %s", repr(fancy_message))
-    result = _wrapper.client.api_call("chat.postMessage", channel=hack_channel, unfurl_media=True,
-                                      text="Where does this appear? http://1.bp.blogspot.com/-_RYZa0ulDEA/T5-7nqTJevI/AAAAAAAAAG8/7500g35pxN0/s400/cute+and+funny+animals+pictures+4.jpg",
-                                      attachments=[fancy_message])
+    result = _wrapper.client.api_call(
+        "chat.postMessage",
+        channel=hack_channel,
+        unfurl_media=True,
+        blocks=fancy_message
+    )
     _logger.info("result: %s", repr(result))
     return "sending poke message"
 

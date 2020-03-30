@@ -36,9 +36,9 @@ pyee==5.0.0
 pylint==1.9.3
 python-dateutil==2.6.1
 python-slugify==1.2.4
-PyYAML==3.12
+PyYAML==3.13
 redis==2.10.6
-requests==2.19.1
+requests==2.20.0
 s3transfer==0.1.13
 singledispatch==3.4.0.3
 six==1.11.0
@@ -53,4 +53,4 @@ websocket-client==0.48.0
 Werkzeug==0.14.1
 wrapt==1.10.11
 wsgi-request-logger==0.4.6
-zappa==0.46.2
+zappa==0.48.2

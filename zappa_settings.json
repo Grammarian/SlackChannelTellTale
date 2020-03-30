@@ -21,10 +21,8 @@
             "venv",
             "zappa_settings.json"
         ],
-        "keep_warm": true,
-        "keep_warm_expression": "rate(5 minutes)",
         "memory_size": 128,
-        "profile_name": "default", 
+        "profile_name": "jpp",
         "project_name": "channeltelltale", 
         "runtime": "python2.7", 
         "s3_bucket": "zappa-pul1xx76r"
@@ -32,7 +30,9 @@
     "prod": {
         "extends": "dev",
         "aws_region": "us-east-1", 
-        "profile_name": "ttd", 
+        "keep_warm": true,
+        "keep_warm_expression": "rate(5 minutes)",
+        "profile_name": "ttd",
         "project_name": "slack-channeltelltale", 
         "runtime": "python2.7", 
         "manage_roles": false, 
