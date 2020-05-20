@@ -12,6 +12,7 @@ import clippy_messages
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff",
           "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
 
+APRIL_FOOL_ONLY_CHANNELS = ["fun-", "test-"]
 
 class Processor:
     """
@@ -89,7 +90,9 @@ class Processor:
         channel_name = channel["name"]
 
         # Is the new channel one of the ones that we want to report?
-        if self.channel_prefixes and not any(channel_name.startswith(x) for x in self.channel_prefixes):
+        if self.channel_prefixes and \
+                not any(channel_name.startswith(x) for x in self.channel_prefixes) and \
+                not any(channel_name.startswith(x) for x in APRIL_FOOL_ONLY_CHANNELS):
             self.logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
             return
 
@@ -115,7 +118,8 @@ class Processor:
             return
 
         # We now have all the information that we need to send the creation notification
-        self._send_pretty_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
+        if not any(channel_name.startswith(x) for x in APRIL_FOOL_ONLY_CHANNELS):
+            self._send_pretty_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
 
         # Do any post notification processing
         self._post_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
@@ -180,17 +184,17 @@ class Processor:
     def _april_fools_day(self, channel, user):
 
         # For testing purposes, let's limit this to just my channels
-        if not channel.get("name").startswith("jpp"):
-            return
+        # if not channel.get("name").startswith("jpp"):
+        #     return
 
         # Calculate the users local time
-        tz_offset = user["tz_offset"]
+        tz_offset = user.get("tz_offset", 0)
         user_local_time = datetime.datetime.utcnow() + datetime.timedelta(seconds=tz_offset)
         # Is it the right day?
         target_date = datetime.date(2020, 04, 01)
         if user_local_time.date() != target_date:
             self.logger.info("Not the right day. Should be %s, but is %s" % (target_date, user_local_time))
-            # return
+            return
 
         # Have we annoyed this user already?
         creator_id = channel.get("creator")

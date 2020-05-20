@@ -10,6 +10,7 @@ All actual bot logic is in the Processor class
 import json
 import os
 import logging
+import random
 import redis
 
 from flask import Flask, request, make_response
@@ -18,6 +19,7 @@ from slackclient import SlackClient
 
 from processor import Processor
 from slack_client_wrapper import SlackClientWrapper
+import clippy_messages
 
 APP_NAME = "ChannelTellTale"
 
@@ -76,16 +78,6 @@ def handle_channel_renamed(event_data):
     _processor.process_channel_event("rename", event_data)
 
 
-# @slack_events_adapter.on("message.channels")
-# @slack_events_adapter.on("message")
-# def handle_channel_message(event_data):
-#     """
-#     Event callback when a message is posted to a channel
-#     """
-#     _logger.info("received message.channels event: %s", json.dumps(event_data))
-#     # _processor.process_channel_event("rename", event_data)
-
-
 @app.route("/interactive", methods=["GET", "POST"])
 def interactive_handler():
     """
@@ -109,6 +101,29 @@ def interactive_handler():
         return make_response("Bad response.", 500)
     if isinstance(response, str):
         return response
+    return make_response(json.dumps(response), 200, [["Content-type", "application/json; charset=utf-8"]])
+
+
+@app.route("/clippyslashcmd", methods=["GET", "POST"])
+def slash_clippy_handler():
+    """
+    This is called when the user enters a slash command.
+    """
+    # If a GET request is made, return 404.
+    if request.method == 'GET':
+        return make_response("You still haven't found what you're looking for.", 404)
+
+    event_data = json.loads(request.form["payload"])
+    _logger.info("received slash_clippy_handler: %s", json.dumps(event_data))
+
+    text = event_data.get("text") or ""
+    blocks = clippy_messages.NEW_GROUP if text.startswith("1") else \
+        clippy_messages.NEW_THREAD if text.startswith("2") else \
+        random.choice([clippy_messages.NEW_GROUP, clippy_messages.NEW_THREAD])
+    response = {
+        "response_type": "in_channel",
+        "blocks": blocks
+    }
     return make_response(json.dumps(response), 200, [["Content-type", "application/json; charset=utf-8"]])
 
 

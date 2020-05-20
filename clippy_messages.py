@@ -230,13 +230,36 @@ RESPONSES = {
     ],
     "click_die": [
         {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Bill Gates fires Clippy*"
+            }
+        },
+        {
             "type": "image",
             "title": {
                 "type": "plain_text",
-                "text": "Bill Gates fires Clippy"
+                "text": "Fire"
             },
             "image_url": "https://media.giphy.com/media/5nsiFjdgylfK3csZ5T/giphy.gif",
             "alt_text": "Example Image"
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "Hide this. I've had enough"
+                    },
+                    "value": "click_enough"
+                }
+            ]
         }
     ],
     "click_um": [
