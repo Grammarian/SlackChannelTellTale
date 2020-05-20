@@ -11,8 +11,19 @@ import clippy_messages
 
 COLORS = ["#ff1744", "#f50057", "#d500f9", "#651fff", "#3d5afe", "#2979ff", "#00b0ff", "#00e5ff",
           "#1de9b6", "#00e676", "#76ff03", "#ffea00", "#ffc400", "#ff9100", "#ff3d00"]
-
+AVALANCHES = [
+    "https://media.giphy.com/media/MZoiwmsZXx6g0/giphy-downsized.gif",
+    "https://media.giphy.com/media/ZTjQgJGDiuJZS/giphy-downsized.gif",
+    "https://media.giphy.com/media/l41YBikSYhA4LybJe/giphy-downsized.gif",
+    "https://media.giphy.com/media/xT5LMSY5XBlbAXBVwk/giphy.gif"
+]
 APRIL_FOOL_ONLY_CHANNELS = ["fun-", "test-"]
+
+# How long do we want to keep information about channels? Default is 60 days.
+# During this period we will not report the same channel a second time.
+# If a rename happens outside of this period, we will announce the same channel a second time.
+CHANNEL_INFO_TTL_IN_SECONDS = 60 * (24 * 60 * 60)
+
 
 class Processor:
     """
@@ -36,8 +47,8 @@ class Processor:
         redis_channel_key = "channel:%s" % channel["id"]
         is_new = self.redis_client.setnx(redis_channel_key, channel.get("created", "0"))
         if is_new:
-            # We don't want our redis instance to just continue growing, so delete the key after 7 days
-            self.redis_client.expire(redis_channel_key, 7 * 24 * 60 * 60)
+            # We don't want our redis instance to just continue growing, so delete the key after 60 days
+            self.redis_client.expire(redis_channel_key, CHANNEL_INFO_TTL_IN_SECONDS)
         return not is_new
 
     def get_channel_info(self, channel_id):
@@ -133,17 +144,6 @@ class Processor:
         self.logger.info("channel: %s", json.dumps(channel))
         self.logger.info("creator: %s", json.dumps(creator))
 
-        # Setup all the values that will be needed for the messages
-        values = {
-            "creator_id": nested_get(creator, "id"),
-            "creator_name": nested_get(creator, "profile", "real_name_normalized"),
-            "creator_image": nested_get(creator, "profile", "image_24"),
-            "channel_id": nested_get(channel, "id"),
-            "channel_name": nested_get(channel, "name"),
-            "channel_purpose": nested_get(channel, "purpose", "value"),
-            "rename_msg": "(via renaming)" if event_type == "rename" else ""
-        }
-
         # Use templates for all fields in the message (even though some don't need complex substitutions).
         # The messages use the attachments format: https://api.slack.com/docs/message-attachments
         MESSAGE_TEMPLATE = {
@@ -158,12 +158,26 @@ class Processor:
             "text": "{channel_purpose}"
         }
         # Make a nicely format notification from the above template
-        fancy_message = {key: value.format(**values) for (key, value) in MESSAGE_TEMPLATE.items()}
+        fancy_message = self._make_formatted_message(MESSAGE_TEMPLATE, channel, creator, event_type)
         target_channel = "jpp-notify-ttd-aws" if channel.get("name").startswith("jpp") else self.target_channel_id
         self.logger.info("sending to %s: %s", target_channel, json.dumps(fancy_message))
 
         # Finally, announce the new channel in the announcement channel
         self.slack_client.post_chat_message(target_channel, None, [fancy_message])
+
+    def _make_formatted_message(self, message_template, channel, creator, event_type):
+        # Setup all the values that will be needed for the messages
+        values = {
+            "creator_id": nested_get(creator, "id"),
+            "creator_name": nested_get(creator, "profile", "real_name_normalized"),
+            "creator_image": nested_get(creator, "profile", "image_24"),
+            "channel_id": nested_get(channel, "id"),
+            "channel_name": nested_get(channel, "name"),
+            "channel_purpose": nested_get(channel, "purpose", "value"),
+            "rename_msg": "(via renaming)" if event_type == "rename" else ""
+        }
+        fancy_message = {key: value.format(**values) for (key, value) in message_template.items()}
+        return fancy_message
 
     def _post_notification(self, event_type, channel, user):
         """
@@ -177,7 +191,7 @@ class Processor:
         if event_type != "create":
             return
 
-        self._post_notification_jira(channel)
+        self._post_notification_jira(channel, user)
 
         self._april_fools_day(channel, user)
 
@@ -191,7 +205,7 @@ class Processor:
         tz_offset = user.get("tz_offset", 0)
         user_local_time = datetime.datetime.utcnow() + datetime.timedelta(seconds=tz_offset)
         # Is it the right day?
-        target_date = datetime.date(2020, 04, 01)
+        target_date = datetime.date(user_local_time.date().year, 04, 01)
         if user_local_time.date() != target_date:
             self.logger.info("Not the right day. Should be %s, but is %s" % (target_date, user_local_time))
             return
@@ -217,11 +231,12 @@ class Processor:
         result = self.redis_client.get(redis_key)
         return True if result else False
 
-    def _post_notification_jira(self, channel):
+    def _post_notification_jira(self, channel, user):
         """
         Do any post processing related to jira
 
         :param channel: Full channel info
+        :param user: Full user info about channel creator
         """
         # If we're not configured for jira, there's nothing to do
         if not self.jira_prefix:
@@ -242,6 +257,24 @@ class Processor:
         }
         channel_id = channel.get("id")
         self.slack_client.post_chat_message(channel_id, None, [message])
+
+        # Warn the author if the channel is just a jira ticket number
+        name_without_prefix = self._remove_prefix(channel_name)
+        self.logger.debug("%s -> %s" % (channel_name, name_without_prefix))
+
+        if name_without_prefix == jira_id:
+            message = {
+                "fallback": "It's normally best to name a channel with more than just the JIRA issue number",
+                "color": random.choice(COLORS),
+                "title": "Friendly reminder about channel names",
+                "text": "<@{creator_id}> It's normally better to have more descriptive channel names.\n\n"
+                        "Renaming this channel to something like *#{channel_name}-what-went-wrong* will prevent the *Powers That Be* from descending in wrath upon your head :smile:\n",
+                "image_url": random.choice(AVALANCHES),
+                "footer": "To rename this channel, click the 'i' icon at the top-right of this channel, and then click the '... More' button, and choose 'Rename channel'.",
+                "footer_icon": "https://qresolve.files.wordpress.com/2015/02/information-icon.png"
+            }
+            fancy_message = self._make_formatted_message(message, channel, user, "")
+            self.slack_client.post_chat_message(channel_id, None, [fancy_message])
 
     def _extract_jira_id(self, channel_name):
         """
