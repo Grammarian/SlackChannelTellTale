@@ -4,6 +4,8 @@ import logging
 import random
 import re
 import time
+import itertools
+from collections import namedtuple
 
 from in_memory_redis import InMemoryRedis
 from toolbox import nested_get
@@ -18,6 +20,22 @@ AVALANCHES = [
     "https://media.giphy.com/media/xT5LMSY5XBlbAXBVwk/giphy.gif"
 ]
 APRIL_FOOL_ONLY_CHANNELS = ["fun-", "test-"]
+
+KnownUser = namedtuple('KnownUser', ['display_name', 'user_id'])
+KNOWN_USERS = [
+    KnownUser(display_name="chris.phillips", user_id="U0BN1PCTC"),
+    KnownUser(display_name="mark.boulter", user_id="UGWFZV602"),
+    KnownUser(display_name="steve.friesen", user_id="U0ENRFN7L"),
+    KnownUser(display_name="carl.johnson", user_id="U198P6KHT"),
+    KnownUser(display_name="zak.stengel", user_id="U0BEDB06M"),
+    KnownUser(display_name="vishal.egbert", user_id="UNTHRT5RN"),
+    KnownUser(display_name="phillip.piper", user_id="UAKA6GKFF"),
+]
+
+FOMO_USERS = {
+    "bug-im-": ["chris.phillips", "mark.boulter", "steve.friesen", "carl.johnson"],
+    "jpp-": ["phillip.piper", "vishal.egbert"] #, "steve.friesen"]
+}
 
 # How long do we want to keep information about channels? Default is 60 days.
 # During this period we will not report the same channel a second time.
@@ -191,9 +209,59 @@ class Processor:
         if event_type != "create":
             return
 
+        self._post_notification_interested_users(channel, user)
+
         self._post_notification_jira(channel, user)
 
         self._april_fools_day(channel, user)
+
+    def _post_notification_interested_users(self, channel, user):
+        channel_name = channel.get("name")
+        if not channel_name.startswith("jpp"):
+            return
+
+        # Calculate list of users interested in this channel
+        list_of_users = [users for (prefix, users) in FOMO_USERS.items() if channel_name.startswith(prefix)]
+        interested_user_display_names = set(itertools.chain.from_iterable(list_of_users))
+        self.logger.info("Users interested in this group: %r" % interested_user_display_names)
+
+        # Find the full user definition for each user
+        interested_users = [self.get_user_record(x) for x in interested_user_display_names]
+        interested_users = [x for x in interested_users if x]  # remove None's
+
+        # Remove the users that are already in the group
+        members = channel.get("members", [])
+        interested_users = [x for x in interested_users if not x.user_id in members]
+        self.logger.info("Users interested in this group that are not already members: %r" % interested_users)
+
+        # If there is no one who want to be included, we can return now
+        if not interested_users:
+            return
+
+        people_to_invite = ["<@%s>" % x.display_name for x in interested_users]
+        message = {
+            "color": random.choice(COLORS),
+            "title": "People who suffer from FOMO",
+            "text": "These people would like to be invited to this group. Copy and paste the following command to invite them:\n\nDo you want join? " + " ".join(people_to_invite),
+        }
+        fancy_message = self._make_formatted_message(message, channel, user, "")
+        channel_id = channel.get("id")
+        self.slack_client.post_chat_message(channel_id, None, [fancy_message])
+
+        # Send direct messages to the invited users
+        for user in interested_users:
+            message = {
+                "color": random.choice(COLORS),
+                "pretext": "*FOMO Sufferers of the world rejoice!* :tada: \n<@{creator_id}> has created a group that you might want to join",
+                "title": "<#{channel_id}|{channel_name}>",
+                "text": "{channel_purpose}",
+                "footer": "If you don't want to be notified about these, please message <@phillip.piper> and he will remove you",
+                "footer_icon": "https://qresolve.files.wordpress.com/2015/02/information-icon.png"
+            }
+            fancy_message = self._make_formatted_message(message, channel, user, "")
+            text = fancy_message.get("pretext")
+            del fancy_message["pretext"]
+            self.slack_client.post_chat_message("UAKA6GKFF", text, [fancy_message], as_user=True) # user.user_id
 
     def _april_fools_day(self, channel, user):
 
@@ -207,7 +275,7 @@ class Processor:
         # Is it the right day?
         target_date = datetime.date(user_local_time.date().year, 04, 01)
         if user_local_time.date() != target_date:
-            self.logger.info("Not the right day. Should be %s, but is %s" % (target_date, user_local_time))
+            self.logger.info("Can't do it. Not today. Should be %s, but is %s" % (target_date, user_local_time))
             return
 
         # Have we annoyed this user already?
@@ -334,3 +402,10 @@ class Processor:
             self.logger.info("user(%s/%s) has had enough" % (user_id, nested_get(event_data, "user", "name") ))
 
         return ""
+
+    def get_user_record(self, user_display_name):
+        try:
+            return next(x for x in KNOWN_USERS if x.display_name == user_display_name)
+        except StopIteration:
+            self.logger.warning("User '%s' was not found in KNOWN_USERS" % user_display_name)
+            return None

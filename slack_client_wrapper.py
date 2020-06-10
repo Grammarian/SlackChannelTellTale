@@ -20,7 +20,7 @@ class SlackClientWrapper:
         self.logger.info("calling 'users.info': %s", user_id)
         return self.client.api_call("users.info", user=user_id)
 
-    def post_chat_message(self, channel_id, text=None, attachments=[], blocks=None):
+    def post_chat_message(self, channel_id, text=None, attachments=[], blocks=None, as_user=False):
         self.logger.info("sending to %s: text=%s, attachments=%s, blocks=%s",
                          channel_id, text, json.dumps(attachments), json.dumps(blocks))
         return self.client.api_call(
@@ -28,6 +28,7 @@ class SlackClientWrapper:
             channel=channel_id,
             text=text,
             unfurl_media=True,
+            as_user=as_user,
             attachments=attachments or None,
             blocks=blocks)
 

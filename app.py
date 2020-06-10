@@ -119,7 +119,7 @@ def slash_clippy_handler():
     text = event_data.get("text") or ""
     blocks = clippy_messages.NEW_GROUP if text.startswith("1") else \
         clippy_messages.NEW_THREAD if text.startswith("2") else \
-        random.choice([clippy_messages.NEW_GROUP, clippy_messages.NEW_THREAD])
+            random.choice([clippy_messages.NEW_GROUP, clippy_messages.NEW_THREAD])
     response = {
         "response_type": "in_channel",
         "blocks": blocks
@@ -197,24 +197,25 @@ def poke_handler():
 def poke2_handler():
     fancy_message = [
         {
-            "type": "image",
-            "image_url": "https://tenor.com/view/clip-windows-microsoft-agent-gif-11209432",
-            "alt_text": "Example Image"
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "A group has been created that you might want to join:"
+            }
         },
         {
             "type": "section",
             "text": {
-                "type": "plain_text",
-                "text": "Hello!",
-                "emoji": True
+                "type": "mrkdwn",
+                "text": "*Group*: #bug-im-373-ctv-cross-device\nAll advertiser campaigns use the CTV graph for attribution when one campaign selects it"
             }
         }
     ]
     _logger.info("sending message: %s", repr(fancy_message))
     result = _wrapper.client.api_call(
         "chat.postMessage",
-        channel=hack_channel,
-        unfurl_media=True,
+        channel="UAKA6GKFF",
+        as_user=True,
         blocks=fancy_message
     )
     _logger.info("result: %s", repr(result))
