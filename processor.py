@@ -217,8 +217,8 @@ class Processor:
 
     def _post_notification_interested_users(self, channel, user):
         channel_name = channel.get("name")
-        if not channel_name.startswith("jpp"):
-            return
+        # if not channel_name.startswith("jpp"):
+        #     return
 
         # Calculate list of users interested in this channel
         list_of_users = [users for (prefix, users) in FOMO_USERS.items() if channel_name.startswith(prefix)]
