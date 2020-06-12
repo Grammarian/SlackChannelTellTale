@@ -33,6 +33,7 @@ TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split()  # whitespace separated list
 REDIS_URL = os.getenv("REDIS_URL")
 JIRA_URL = os.getenv("JIRA_URL")  # e.g. https://atlassian.mycompany.com
+FOMO_USERS = os.getenv("FOMO_USERS")  # "bug-im:fred.hole,joe.bloggs|approvals-:boss.man"
 
 # Initialize logging
 FORMAT = "%(asctime)s | %(process)d | %(name)s | %(levelname)s | %(thread)d | %(message)s"
@@ -53,7 +54,7 @@ app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 _wrapper = SlackClientWrapper(SlackClient(SLACK_BOT_TOKEN), _logger)
-_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL)
+_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, fomo_users_as_string=FOMO_USERS)
 
 
 # -------------------------

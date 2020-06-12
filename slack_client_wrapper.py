@@ -20,6 +20,19 @@ class SlackClientWrapper:
         self.logger.info("calling 'users.info': %s", user_id)
         return self.client.api_call("users.info", user=user_id)
 
+    def users(self):
+        self.logger.info("calling 'users.list'")
+        response = self.client.api_call("users.list")
+        users = []
+        while response.get("ok"):
+            users.extend(response.get("members"))
+            next_cursor = toolbox.nested_get(response, "response_metadata", "next_cursor")
+            if next_cursor:
+                response = self.client.api_call("users.list", cursor=next_cursor)
+            else:
+                break
+        return users
+
     def post_chat_message(self, channel_id, text=None, attachments=[], blocks=None, as_user=False):
         self.logger.info("sending to %s: text=%s, attachments=%s, blocks=%s",
                          channel_id, text, json.dumps(attachments), json.dumps(blocks))

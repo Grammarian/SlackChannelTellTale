@@ -22,20 +22,6 @@ AVALANCHES = [
 APRIL_FOOL_ONLY_CHANNELS = ["fun-", "test-"]
 
 KnownUser = namedtuple('KnownUser', ['display_name', 'user_id'])
-KNOWN_USERS = [
-    KnownUser(display_name="chris.phillips", user_id="U0BN1PCTC"),
-    KnownUser(display_name="mark.boulter", user_id="UGWFZV602"),
-    KnownUser(display_name="steve.friesen", user_id="U0ENRFN7L"),
-    KnownUser(display_name="carl.johnson", user_id="U198P6KHT"),
-    KnownUser(display_name="zak.stengel", user_id="U0BEDB06M"),
-    KnownUser(display_name="vishal.egbert", user_id="UNTHRT5RN"),
-    KnownUser(display_name="phillip.piper", user_id="UAKA6GKFF"),
-]
-
-FOMO_USERS = {
-    "bug-im-": ["chris.phillips", "mark.boulter", "steve.friesen", "carl.johnson"],
-    "jpp-": ["phillip.piper", "vishal.egbert"] #, "steve.friesen"]
-}
 
 # How long do we want to keep information about channels? Default is 60 days.
 # During this period we will not report the same channel a second time.
@@ -48,7 +34,8 @@ class Processor:
     This class processes slack events and sends notification messages as required
     """
 
-    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None):
+    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None,
+                 fomo_users_as_string=None):
         self.target_channel_id = target_channel_id
         self.channel_prefixes = channel_prefixes
         self.slack_client = slack_client
@@ -57,6 +44,41 @@ class Processor:
 
         # Make sure that, if there is a jira prefix, it ends with "/jira/browse/"
         self.jira_prefix = jira if not jira or jira.endswith("/jira/browse/") else jira + "/jira/browse/"
+
+        # Parse the fomo list of users
+        self.fomo_users = self._parse_fomo_users(fomo_users_as_string)
+
+    def _parse_fomo_users(self, fomo_users_as_string):
+        """
+        Parse a list of channel prefixes and users from the given string.
+        The format is [channel_prefix]:[display_name1],[display_name2]|[channel_prefix2]:[display_name3]...
+        """
+        self.logger.info("parse_fomo_users from %s", fomo_users_as_string)
+
+        if not fomo_users_as_string:
+            return {}
+
+        # Map all display names to user ids
+        map_name_to_id = {user.get("name"): user.get("id") for user in self.slack_client.users()}
+        self.logger.info("loaded %d users from slack", len(map_name_to_id))
+
+        fomo_definitions = {}
+        for channel_data in fomo_users_as_string.split("|"):
+            (channel_prefix, users) = channel_data.split(":")
+            known_users = self._parse_one_fomo_channel(channel_prefix, map_name_to_id, users)
+            fomo_definitions[channel_prefix] = known_users
+
+        self.logger.info("fomo users: %s", json.dumps(fomo_definitions, indent=2))
+        return fomo_definitions
+
+    def _parse_one_fomo_channel(self, channel_prefix, map_name_to_id, users):
+        display_names = [x.strip() for x in users.split(",")]
+        bad_names = [x for x in display_names if x not in map_name_to_id]
+        if bad_names:
+            self.logger.error("For channel %s, these users can't be found: %s", channel_prefix, bad_names)
+        names_with_ids = [(x, map_name_to_id.get(x)) for x in display_names if x not in bad_names]
+        known_users = [KnownUser(name, user_id) for (name, user_id) in names_with_ids]
+        return known_users
 
     def remember_channel(self, channel):
         """
@@ -215,19 +237,15 @@ class Processor:
 
         self._april_fools_day(channel, user)
 
-    def _post_notification_interested_users(self, channel, user):
+    def _post_notification_interested_users(self, channel, creator):
         channel_name = channel.get("name")
         # if not channel_name.startswith("jpp"):
         #     return
 
         # Calculate list of users interested in this channel
-        list_of_users = [users for (prefix, users) in FOMO_USERS.items() if channel_name.startswith(prefix)]
-        interested_user_display_names = set(itertools.chain.from_iterable(list_of_users))
-        self.logger.info("Users interested in this group: %r" % interested_user_display_names)
-
-        # Find the full user definition for each user
-        interested_users = [self.get_user_record(x) for x in interested_user_display_names]
-        interested_users = [x for x in interested_users if x]  # remove None's
+        list_of_users = [users for (prefix, users) in self.fomo_users.items() if channel_name.startswith(prefix)]
+        interested_users = set(itertools.chain.from_iterable(list_of_users))
+        self.logger.info("Users interested in this group: %r" % interested_users)
 
         # Remove the users that are already in the group
         members = channel.get("members", [])
@@ -242,11 +260,11 @@ class Processor:
         message = {
             "color": random.choice(COLORS),
             "title": "People who suffer from FOMO",
-            "text": "These people would like to be invited to this group. Copy and paste the following command to invite them:\n\nDo you want join? " + " ".join(people_to_invite),
+            "text": "These people would like to be invited to this group. Copy and paste the following command to invite them:\n\nDo you want join? " + " ".join(
+                people_to_invite),
         }
-        fancy_message = self._make_formatted_message(message, channel, user, "")
         channel_id = channel.get("id")
-        self.slack_client.post_chat_message(channel_id, None, [fancy_message])
+        self.slack_client.post_chat_message(channel_id, None, [message])
 
         # Send direct messages to the invited users
         for user in interested_users:
@@ -258,10 +276,10 @@ class Processor:
                 "footer": "If you don't want to be notified about these, please message <@phillip.piper> and he will remove you",
                 "footer_icon": "https://qresolve.files.wordpress.com/2015/02/information-icon.png"
             }
-            fancy_message = self._make_formatted_message(message, channel, user, "")
+            fancy_message = self._make_formatted_message(message, channel, creator, "")
             text = fancy_message.get("pretext")
             del fancy_message["pretext"]
-            self.slack_client.post_chat_message("UAKA6GKFF", text, [fancy_message], as_user=True) # user.user_id
+            self.slack_client.post_chat_message(user.user_id, text, [fancy_message], as_user=True)
 
     def _april_fools_day(self, channel, user):
 
@@ -399,13 +417,6 @@ class Processor:
         if clicked_action == "click_enough":
             user_id = nested_get(event_data, "user", "id")
             self._set_user_feature(user_id, "aprilfool")
-            self.logger.info("user(%s/%s) has had enough" % (user_id, nested_get(event_data, "user", "name") ))
+            self.logger.info("user(%s/%s) has had enough" % (user_id, nested_get(event_data, "user", "name")))
 
         return ""
-
-    def get_user_record(self, user_display_name):
-        try:
-            return next(x for x in KNOWN_USERS if x.display_name == user_display_name)
-        except StopIteration:
-            self.logger.warning("User '%s' was not found in KNOWN_USERS" % user_display_name)
-            return None
