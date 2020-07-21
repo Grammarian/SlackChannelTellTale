@@ -72,7 +72,7 @@ class Processor:
         return fomo_definitions
 
     def _parse_one_fomo_channel(self, channel_prefix, map_name_to_id, users):
-        display_names = [x.strip() for x in users.split(",")]
+        display_names = [x.strip(",@") for x in users.split()]
         bad_names = [x for x in display_names if x not in map_name_to_id]
         if bad_names:
             self.logger.error("For channel %s, these users can't be found: %s", channel_prefix, bad_names)
