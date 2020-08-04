@@ -208,9 +208,9 @@ class Processor:
     def _make_formatted_message(self, message_template, channel, creator, event_type):
         # Setup all the values that will be needed for the messages
         values = {
-            "creator_id": nested_get(creator, "id"),
+            "creator_id": nested_get(creator, "enterprise_user", "id") or nested_get(creator, "id"),
             "creator_name": nested_get(creator, "profile", "real_name_normalized"),
-            "creator_image": nested_get(creator, "profile", "image_24"),
+            "creator_image": nested_get(creator, "profile", "image_32"),
             "channel_id": nested_get(channel, "id"),
             "channel_name": nested_get(channel, "name"),
             "channel_purpose": nested_get(channel, "purpose", "value"),
