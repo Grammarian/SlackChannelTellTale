@@ -131,6 +131,65 @@ creator_info = {u'headers': {u'Access-Control-Allow-Origin': u'*',
            u'tz_offset': 36000,
            u'updated': 1532934256}}
 
+new creator info (2020-08-27)
+{
+  "profile": {
+    "last_name": "Piper",
+    "status_emoji": "",
+    "image_1024": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_1024.jpg",
+    "display_name_normalized": "phillip.piper",
+    "image_32": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_32.jpg",
+    "skype": "",
+    "image_72": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_72.jpg",
+    "status_expiration": 0,
+    "image_192": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_192.jpg",
+    "first_name": "Phillip",
+    "display_name": "phillip.piper",
+    "title": "Developer",
+    "real_name_normalized": "Phillip Piper",
+    "email": "phillip.piper@thetradedesk.com",
+    "is_custom_image": true,
+    "status_text_canonical": "",
+    "image_24": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
+    "image_original": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_original.jpg",
+    "image_48": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_48.jpg",
+    "phone": "+61-405615498",
+    "fields": null,
+    "real_name": "Phillip Piper",
+    "image_512": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_512.jpg",
+    "team": "T0AT6LB9B",
+    "avatar_hash": "b413a925836f",
+    "status_text": ""
+  },
+  "updated": 1596262828,
+  "tz": "Australia/Canberra",
+  "name": "phillip.piper",
+  "is_ultra_restricted": false,
+  "deleted": false,
+  "is_app_user": false,
+  "is_bot": false,
+  "tz_label": "Australian Eastern Standard Time",
+  "real_name": "Phillip Piper",
+  "color": "84b22f",
+  "team_id": "T0AT6LB9B",
+  "is_admin": false,
+  "enterprise_user": {
+    "is_owner": false,
+    "enterprise_name": "The Trade Desk",
+    "teams": [
+      "T0AT6LB9B"
+    ],
+    "is_admin": false,
+    "enterprise_id": "ES0HQDK1D",
+    "id": "UAKA6GKFF"
+  },
+  "is_restricted": false,
+  "tz_offset": 36000,
+  "is_primary_owner": false,
+  "id": "UAKA6GKFF",
+  "is_owner": false
+}
+
  interactive_handler.payload =
  {
    "attachment_id": "1",

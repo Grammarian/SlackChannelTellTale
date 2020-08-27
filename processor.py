@@ -192,7 +192,7 @@ class Processor:
                         "Its purpose is: {channel_purpose} ",
             "color": random.choice(COLORS),
             "pretext": "A new channel has been created {rename_msg} :tada:",
-            "author_name": "{creator_name} <@{creator_id}>",
+            "author_name": "{creator_name} <@{creator_display_name}>",
             "author_icon": "{creator_image}",
             "title": "<#{channel_id}>",
             "text": "{channel_purpose}"
@@ -211,6 +211,7 @@ class Processor:
             "creator_id": nested_get(creator, "enterprise_user", "id") or nested_get(creator, "id"),
             "creator_name": nested_get(creator, "profile", "real_name_normalized"),
             "creator_image": nested_get(creator, "profile", "image_32"),
+            "creator_display_name": nested_get(creator, "profile", "display_name"),
             "channel_id": nested_get(channel, "id"),
             "channel_name": nested_get(channel, "name"),
             "channel_purpose": nested_get(channel, "purpose", "value"),
@@ -270,7 +271,7 @@ class Processor:
         for user in interested_users:
             message = {
                 "color": random.choice(COLORS),
-                "pretext": "*FOMO Sufferers of the world rejoice!* :tada: \n<@{creator_id}> has created a group that you might want to join",
+                "pretext": "*FOMO Sufferers of the world rejoice!* :tada: \n<@{creator_display_name}> has created a group that you might want to join",
                 "title": "<#{channel_id}|{channel_name}>",
                 "text": "{channel_purpose}",
                 "footer": "If you don't want to be notified about these, please message <@phillip.piper> and he will remove you",
@@ -353,7 +354,7 @@ class Processor:
                 "fallback": "It's normally best to name a channel with more than just the JIRA issue number",
                 "color": random.choice(COLORS),
                 "title": "Friendly reminder about channel names",
-                "text": "<@{creator_id}> It's normally better to have more descriptive channel names.\n\n"
+                "text": "<@{creator_display_name}> It's normally better to have more descriptive channel names.\n\n"
                         "Renaming this channel to something like *#{channel_name}-what-went-wrong* will prevent the *Powers That Be* from descending in wrath upon your head :smile:\n",
                 "image_url": random.choice(AVALANCHES),
                 "footer": "To rename this channel, click the 'i' icon at the top-right of this channel, and then click the '... More' button, and choose 'Rename channel'.",
