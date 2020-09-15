@@ -22,6 +22,7 @@ from slack_client_wrapper import SlackClientWrapper
 import clippy_messages
 
 APP_NAME = "ChannelTellTale"
+VERSION = "1.1.1-2020-Sept-15"  # Update this manually on each release
 
 # Get environment settings 
 # getenv() is used for optional settings; os.environ[] is used for required settings
@@ -41,7 +42,7 @@ logging.basicConfig(format=FORMAT, level=logging.DEBUG if DEBUG else logging.INF
 _logger = logging.getLogger(APP_NAME)
 
 # Log some settings
-_logger.info("STARTING %s", APP_NAME)
+_logger.info("STARTING %s (%s)", APP_NAME, VERSION)
 _logger.info("DEBUG: %s", DEBUG)
 _logger.info("PORT: %s", PORT)
 _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)

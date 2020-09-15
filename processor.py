@@ -51,7 +51,10 @@ class Processor:
     def _parse_fomo_users(self, fomo_users_as_string):
         """
         Parse a list of channel prefixes and users from the given string.
-        The format is [channel_prefix]:[display_name1],[display_name2]|[channel_prefix2]:[display_name3]...
+        The format is:
+         - <channel_definition>[|<channel_definition>]*
+        and <channel_definition> is:
+         - <channel_prefix>[,channel_prefix]*:<display_name>[,<display_name>]*
         """
         self.logger.info("parse_fomo_users from %s", fomo_users_as_string)
 
@@ -63,22 +66,24 @@ class Processor:
         self.logger.info("loaded %d users from slack", len(map_name_to_id))
 
         fomo_definitions = {}
-        for channel_data in fomo_users_as_string.split("|"):
-            (channel_prefix, users) = channel_data.split(":")
-            known_users = self._parse_one_fomo_channel(channel_prefix, map_name_to_id, users)
-            fomo_definitions[channel_prefix] = known_users
+        for channel_definition in fomo_users_as_string.split("|"):
+            (channels, users_for_channels) = self._parse_one_fomo_channel(channel_definition, map_name_to_id)
+            for channel in channels:
+                fomo_definitions[channel] = users_for_channels
 
         self.logger.info("fomo users: %s", json.dumps(fomo_definitions, indent=2))
         return fomo_definitions
 
-    def _parse_one_fomo_channel(self, channel_prefix, map_name_to_id, users):
+    def _parse_one_fomo_channel(self, channel_definition, map_name_to_id):
+        (channel_prefixes, users) = channel_definition.split(":")
+        channels = channel_prefixes.split(',')
         display_names = [x.strip(",@") for x in users.split()]
         bad_names = [x for x in display_names if x not in map_name_to_id]
         if bad_names:
-            self.logger.error("For channel %s, these users can't be found: %s", channel_prefix, bad_names)
+            self.logger.error("For channel %s, these users can't be found: %s", channel_prefixes, bad_names)
         names_with_ids = [(x, map_name_to_id.get(x)) for x in display_names if x not in bad_names]
         known_users = [KnownUser(name, user_id) for (name, user_id) in names_with_ids]
-        return known_users
+        return channels, known_users
 
     def remember_channel(self, channel):
         """
