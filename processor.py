@@ -62,8 +62,9 @@ class Processor:
             return {}
 
         # Map all display names to user ids
+        start = time.time()
         map_name_to_id = {user.get("name"): user.get("id") for user in self.slack_client.users()}
-        self.logger.info("loaded %d users from slack", len(map_name_to_id))
+        self.logger.info("loaded %d users from slack in %d seconds", len(map_name_to_id), int(time.time() - start))
 
         fomo_definitions = {}
         for channel_definition in fomo_users_as_string.split("|"):
