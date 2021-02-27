@@ -13,8 +13,8 @@ class SlackClientWrapper:
         self.logger = logger or toolbox.null_logger()
 
     def channel_info(self, channel_id):
-        self.logger.info("calling 'channels.info': %s", channel_id)
-        return self.client.api_call("channels.info", channel=channel_id)
+        self.logger.info("calling 'conversations.info': %s", channel_id)
+        return self.client.api_call("conversations.info", channel=channel_id)
 
     def user_info(self, user_id):
         self.logger.info("calling 'users.info': %s", user_id)
