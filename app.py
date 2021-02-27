@@ -22,7 +22,7 @@ from slack_client_wrapper import SlackClientWrapper
 import clippy_messages
 
 APP_NAME = "ChannelTellTale"
-VERSION = "1.1.1-2020-Sept-15"  # Update this manually on each release
+VERSION = "1.2.0-2021-Feb-27"  # Update this manually on each release
 
 # Get environment settings 
 # getenv() is used for optional settings; os.environ[] is used for required settings
