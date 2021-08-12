@@ -277,7 +277,7 @@ class Processor:
         for user in interested_users:
             message = {
                 "color": random.choice(COLORS),
-                "pretext": "*FOMO Sufferers of the world rejoice!* :tada: \n<@{creator_display_name}> has created a group that you might want to join",
+                "pretext": "*FOMO sufferers of the world rejoice!* :tada: \n<@{creator_display_name}> has created a group that you might want to join",
                 "title": "<#{channel_id}|{channel_name}>",
                 "text": "{channel_purpose}",
                 "footer": "If you don't want to be notified about these, please message <@phillip.piper> and he will remove you",
@@ -298,7 +298,7 @@ class Processor:
         tz_offset = user.get("tz_offset", 0)
         user_local_time = datetime.datetime.utcnow() + datetime.timedelta(seconds=tz_offset)
         # Is it the right day?
-        target_date = datetime.date(user_local_time.date().year, 04, 01)
+        target_date = datetime.date(user_local_time.date().year, 4, 1)
         if user_local_time.date() != target_date:
             self.logger.info("Can't do it. Not today. Should be %s, but is %s" % (target_date, user_local_time))
             return
@@ -363,7 +363,7 @@ class Processor:
                 "text": "<@{creator_display_name}> It's normally better to have more descriptive channel names.\n\n"
                         "Renaming this channel to something like *#{channel_name}-what-went-wrong* will prevent the *Powers That Be* from descending in wrath upon your head :smile:\n",
                 "image_url": random.choice(AVALANCHES),
-                "footer": "To rename this channel, click the 'i' icon at the top-right of this channel, and then click the '... More' button, and choose 'Rename channel'.",
+                "footer": "To rename this channel, click the 'down arrow' icon at the top-left of this channel (next to the channel name), then click the 'Settings' tab, then hover over the 'Channel name' section, and click the 'Edit' button that appears.\n",
                 "footer_icon": "https://qresolve.files.wordpress.com/2015/02/information-icon.png"
             }
             fancy_message = self._make_formatted_message(message, channel, user, "")

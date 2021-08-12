@@ -15,14 +15,14 @@ import redis
 
 from flask import Flask, request, make_response
 from slackeventsapi import SlackEventAdapter
-from slackclient import SlackClient
+from slack import WebClient
 
 from processor import Processor
 from slack_client_wrapper import SlackClientWrapper
 import clippy_messages
 
 APP_NAME = "ChannelTellTale"
-VERSION = "1.2.0-2021-Feb-27"  # Update this manually on each release
+VERSION = "1.3.3 2021-Aug-13"  # Update this manually on each release
 
 # Get environment settings 
 # getenv() is used for optional settings; os.environ[] is used for required settings
@@ -30,6 +30,7 @@ DEBUG = bool(os.getenv("DEBUG"))
 PORT = os.getenv("PORT") or 3000
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
+SLACK_SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
 CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split()  # whitespace separated list
 REDIS_URL = os.getenv("REDIS_URL")
@@ -50,11 +51,13 @@ _logger.info("TARGET_CHANNEL_ID: %s", TARGET_CHANNEL_ID)
 _logger.info("REDIS_URL: %s", REDIS_URL)
 _logger.info("JIRA_URL: %s", JIRA_URL)
 
+_logger.debug("*** This is a DEBUG build ***")
+
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
-slack_events_adapter = SlackEventAdapter(SLACK_VERIFICATION_TOKEN, "/slack/events", server=app)
+slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", server=app)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
-_wrapper = SlackClientWrapper(SlackClient(SLACK_BOT_TOKEN), _logger)
+_wrapper = SlackClientWrapper(WebClient(SLACK_BOT_TOKEN), _logger)
 _processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, fomo_users_as_string=FOMO_USERS)
 
 
@@ -134,7 +137,7 @@ def slash_clippy_handler():
 
 @app.route("/")
 def slash_handler():
-    return APP_NAME
+    return f'{APP_NAME} {VERSION}'
 
 
 @app.route("/ping")

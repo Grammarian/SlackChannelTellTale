@@ -26,8 +26,8 @@ CREATE_EVENT_JIRA = {
         "event_ts": "1537991036.000100",
         "type": "channel_created",
         "channel": {
-            "name_normalized": "jpp-PROJ-1234-dev-test-1",
-            "name": "jpp-PROJ-1234-dev-test-1",
+            "name_normalized": "dev-PROJ-1234-dev-test-1",
+            "name": "dev-PROJ-1234-dev-test-1",
             "creator": "U0BPCEYR4",
             "created": 1537991036,
             "id": "CD1USGKT7",
@@ -58,8 +58,8 @@ CHANNEL_INFO_SUCCESS = {
         "id": "CD1USGKT7",
         "is_channel": True,
         "members": ["UAKA6GKFF"],
-        "name": "jpp-test-2",
-        "name_normalized": "jpp-test-2",
+        "name": "dev-test-2",
+        "name_normalized": "dev-test-2",
         "purpose": {
             "creator": "UAKA6GKFF",
             "value": "TESTING THIS"
@@ -79,8 +79,8 @@ CHANNEL_INFO_SUCCESS_JIRA = {
         "id": "CD1USGKT7",
         "is_channel": True,
         "members": ["UAKA6GKFF"],
-        "name_normalized": "jpp-PROJ-1234-dev-test-1",
-        "name": "jpp-PROJ-1234-dev-test-1",
+        "name_normalized": "dev-PROJ-1234-dev-test-1",
+        "name": "dev-PROJ-1234-dev-test-1",
         "purpose": {
             "creator": "UAKA6GKFF",
             "value": "TESTING THIS"
@@ -103,6 +103,7 @@ USER_INFO_SUCCESS = {
             "email": "phillip.piper@thetradedesk.com",
             "first_name": "Phillip",
             "image_24": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
+            "image_32": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_32.jpg",
             "last_name": "Piper",
             "real_name": "Phillip Piper",
             "real_name_normalized": "Phillip Piper",
@@ -120,24 +121,11 @@ class TestProcessor(unittest.TestCase):
         random.seed(1)  # Make random behave the same each time
         self.maxDiff = None
 
-    def test_extract_search_terms(self):
-        slack_client = MagicMock()
-        processor = Processor("", ["prefix1-", "bug-"], slack_client)
-        tests = [
-            ("channel-name", "this is the channel purpose", "channel name purpose"),
-            ("prefix1-name", None, 'name'),  # prefixes should be removed
-            ("bug-jira-9999", None, ""),  # jira ticket ids should be ignored
-            ("repeated-words", "repeated words should be removed, not repeated", "removed repeated words"),
-        ]
-        for (name, purpose, result) in tests:
-            terms = processor._extract_search_terms({"name": name, "purpose": {"value": purpose}})
-            self.assertEqual(result, terms)
-
     def test_create(self):
         expected_message = {
-            "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
-            "author_name": "Phillip Piper <@UAKA6GKFF>",
-            "fallback": "Phillip Piper just created a new channel  :tada:\n<#CD1USGKT7|jpp-test-2>\nIts purpose is: TESTING THIS ",
+            "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_32.jpg",
+            "author_name": "Phillip Piper <@phillip.piper>",
+            "fallback": "Phillip Piper just created a new channel  :tada:\n<#CD1USGKT7|dev-test-2>\nIts purpose is: TESTING THIS ",
             "pretext": "A new channel has been created  :tada:",
             "text": "TESTING THIS",
             "title": "<#CD1USGKT7>"
@@ -176,7 +164,7 @@ class TestProcessor(unittest.TestCase):
         logger = MagicMock()
         target_channel = "target"
 
-        processor = Processor(target_channel, ["jpp-"], slack_client, logger=logger, jira="https://something")
+        processor = Processor(target_channel, ["dev-"], slack_client, logger=logger, jira="https://something")
         processor.process_channel_event("create", event)
 
         self.assertFalse(logger.error.called)
@@ -190,9 +178,9 @@ class TestProcessor(unittest.TestCase):
 
     def test_rename(self):
         expected_message = {
-            "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_24.jpg",
-            "author_name": "Phillip Piper <@UAKA6GKFF>",
-            "fallback": "Phillip Piper just created a new channel (via renaming) :tada:\n<#CD1USGKT7|jpp-test-2>\nIts purpose is: TESTING THIS ",
+            "author_icon": "https://avatars.slack-edge.com/2018-05-07/360275784695_b413a925836f89c22c8b_32.jpg",
+            "author_name": "Phillip Piper <@phillip.piper>",
+            "fallback": "Phillip Piper just created a new channel (via renaming) :tada:\n<#CD1USGKT7|dev-test-2>\nIts purpose is: TESTING THIS ",
             "pretext": "A new channel has been created (via renaming) :tada:",
             "text": "TESTING THIS",
             "title": "<#CD1USGKT7>"
@@ -225,8 +213,8 @@ class TestProcessor(unittest.TestCase):
         processor = Processor("target", ["only-", "accept-", "these-"], slack_client, logger=logger)
         processor.process_channel_event("rename", event)
 
-        logger.info.assert_called_once_with("ignored... channel name doesn't start with the appropriate prefix: %s",
-                                            "dev-so-trial-notify")
+        logger.info.assert_called_with("ignored... channel name doesn't start with the appropriate prefix: %s",
+                                       "dev-so-trial-notify")
         self.assertFalse(logger.error.called)
         self.assertFalse(slack_client.post_chat_message.called)
 
@@ -246,8 +234,8 @@ class TestProcessor(unittest.TestCase):
 
         self.assertFalse(logger.error.called)
         self.assertFalse(slack_client.post_chat_message.called)
-        logger.info.assert_called_once_with("ignored... we've already processed this channel: %s/%s", channel_id,
-                                            channel_name)
+        logger.info.assert_called_with("ignored... we've already processed this channel: %s/%s", channel_id,
+                                       channel_name)
 
     def test_jira_id_extraction(self):
         slack_client = MagicMock()

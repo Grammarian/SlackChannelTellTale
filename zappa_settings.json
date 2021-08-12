@@ -24,17 +24,17 @@
         "memory_size": 128,
         "profile_name": "jpp",
         "project_name": "channeltelltale", 
-        "runtime": "python2.7", 
+        "runtime": "python3.7",
         "s3_bucket": "zappa-pul1xx76r"
     },
     "prod": {
         "extends": "dev",
         "aws_region": "us-east-1", 
-        "keep_warm": true,
+        "keep_warm": false,
         "keep_warm_expression": "rate(5 minutes)",
-        "profile_name": "ttd",
+        "profile_name": "channel-tell-tale",
         "project_name": "slack-channeltelltale", 
-        "runtime": "python2.7", 
+        "runtime": "python3.7",
         "manage_roles": false, 
         "role_arn": "arn:aws:iam::003576902480:role/Zappa-Lambda-Role", 
         "s3_bucket": "ttd-zappa-lambda-deployments"
