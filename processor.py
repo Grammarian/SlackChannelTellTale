@@ -34,19 +34,28 @@ class Processor:
     This class processes slack events and sends notification messages as required
     """
 
-    def __init__(self, target_channel_id, channel_prefixes, slack_client, redis_client=None, logger=None, jira=None,
+    def __init__(self, target_channel_to_prefixes_map, slack_client, redis_client=None, logger=None, jira=None,
                  fomo_users_as_string=None):
-        self.target_channel_id = target_channel_id
-        self.channel_prefixes = channel_prefixes
         self.slack_client = slack_client
         self.redis_client = redis_client or InMemoryRedis()
         self.logger = logger or logging.getLogger("Processor")
+        self.logger.info("target_channel_to_prefixes_map: %r", target_channel_to_prefixes_map)
 
         # Make sure that, if there is a jira prefix, it ends with "/jira/browse/"
         self.jira_prefix = jira if not jira or jira.endswith("/jira/browse/") else jira + "/jira/browse/"
 
         # Parse the fomo list of users
         self.fomo_users = self._parse_fomo_users(fomo_users_as_string)
+
+        # Convert the map of channel->prefixes into a single list of (prefix, channel) tuples
+        self.all_channel_prefixes_with_target_channel = [
+            (each_prefix, channel)
+            for (channel, prefixes) in target_channel_to_prefixes_map.items()
+            for each_prefix in prefixes
+        ]
+
+        # Create a collection of all known prefixes so we can easily test if we are interested in a channel
+        self.all_channel_prefixes = set(x[0] for x in self.all_channel_prefixes_with_target_channel).union(APRIL_FOOL_ONLY_CHANNELS)
 
     def _parse_fomo_users(self, fomo_users_as_string):
         """
@@ -62,9 +71,7 @@ class Processor:
             return {}
 
         # Map all display names to user ids
-        start = time.time()
-        map_name_to_id = {user.get("name"): user.get("id") for user in self.slack_client.users()}
-        self.logger.info("loaded %d users from slack in %d seconds", len(map_name_to_id), int(time.time() - start))
+        map_name_to_id = {user.get("name"): user.get("id") for user in self._fetch_slack_users()}
 
         fomo_definitions = {}
         for channel_definition in fomo_users_as_string.split("|"):
@@ -72,8 +79,18 @@ class Processor:
             for channel in channels:
                 fomo_definitions[channel] = users_for_channels
 
-        self.logger.info("fomo users: %s", json.dumps(fomo_definitions, indent=2))
+        self.logger.debug("fomo users: %s", json.dumps(fomo_definitions, indent=2))
         return fomo_definitions
+
+    def _fetch_slack_users(self):
+        """
+        Fetch the list of known users from slack.
+        """
+        # THINK - Fetching users takes about ~20 seconds. We could cache the result in redis and refetch it once/day
+        start = time.time()
+        users = self.slack_client.users()
+        self.logger.info("loaded %d users from slack in %d seconds", len(users), int(time.time() - start))
+        return users
 
     def _parse_one_fomo_channel(self, channel_definition, map_name_to_id):
         (channel_prefixes, users) = channel_definition.split(":")
@@ -140,16 +157,15 @@ class Processor:
         if not channel or \
                 "id" not in channel or \
                 "name" not in channel:
-            self.logger.error("ignored... event was missing required attributes")
+            self.logger.error("ignored... event was missing required attributes. channel=%r", channel)
             return
 
         channel_id = channel["id"]
         channel_name = channel["name"]
 
         # Is the new channel one of the ones that we want to report?
-        if self.channel_prefixes and \
-                not any(channel_name.startswith(x) for x in self.channel_prefixes) and \
-                not any(channel_name.startswith(x) for x in APRIL_FOOL_ONLY_CHANNELS):
+        if self.all_channel_prefixes and \
+                not any(channel_name.startswith(x) for x in self.all_channel_prefixes):
             self.logger.info("ignored... channel name doesn't start with the appropriate prefix: %s", channel_name)
             return
 
@@ -175,8 +191,7 @@ class Processor:
             return
 
         # We now have all the information that we need to send the creation notification
-        if not any(channel_name.startswith(x) for x in APRIL_FOOL_ONLY_CHANNELS):
-            self._send_pretty_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
+        self._send_pretty_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
 
         # Do any post notification processing
         self._post_notification(event_type, channel_info.get("channel"), creator_info.get("user"))
@@ -203,13 +218,15 @@ class Processor:
             "title": "<#{channel_id}>",
             "text": "{channel_purpose}"
         }
-        # Make a nicely format notification from the above template
+        # Make a nicely formatted notification from the above template
         fancy_message = self._make_formatted_message(MESSAGE_TEMPLATE, channel, creator, event_type)
-        target_channel = "jpp-notify-ttd-aws" if channel.get("name").startswith("jpp") else self.target_channel_id
-        self.logger.info("sending to %s: %s", target_channel, json.dumps(fancy_message))
 
-        # Finally, announce the new channel in the announcement channel
-        self.slack_client.post_chat_message(target_channel, None, [fancy_message])
+        # Announce the new channel in any matching announcement channels
+        channel_name = channel.get("name")
+        target_channels = [target for (prefix, target) in self.all_channel_prefixes_with_target_channel if channel_name.startswith(prefix)]
+        for target_channel in set(target_channels):
+            self.logger.info("sending to %s: %s", target_channel, json.dumps(fancy_message))
+            self.slack_client.post_chat_message(target_channel, None, [fancy_message])
 
     def _make_formatted_message(self, message_template, channel, creator, event_type):
         # Setup all the values that will be needed for the messages
@@ -228,13 +245,13 @@ class Processor:
 
     def _post_notification(self, event_type, channel, user):
         """
-        Do any post processing required. This can include setting the channel's purpose, topic, or
+        Do any post-processing required. This can include setting the channel's purpose, topic, or
         sending an intro message to the channel.
 
         :param event_type: Was the channel created or renamed?
         :param channel: Full channel info
         """
-        # At the moment, all the post processing is only relevant to newly created channels
+        # At the moment, all the post-processing is only relevant to newly created channels
         if event_type != "create":
             return
 
@@ -246,8 +263,6 @@ class Processor:
 
     def _post_notification_interested_users(self, channel, creator):
         channel_name = channel.get("name")
-        # if not channel_name.startswith("jpp"):
-        #     return
 
         # Calculate list of users interested in this channel
         list_of_users = [users for (prefix, users) in self.fomo_users.items() if channel_name.startswith(prefix)]
@@ -337,7 +352,7 @@ class Processor:
 
         # If the channel isn't related to a JIRA ticket, there's nothing else to do
         channel_name = channel.get("name")
-        jira_id = self._extract_jira_id(channel_name)
+        (jira_id, channel_name_without_prefix) = self._extract_jira_id(channel_name)
         if not jira_id:
             return
 
@@ -352,10 +367,8 @@ class Processor:
         self.slack_client.post_chat_message(channel_id, None, [message])
 
         # Warn the author if the channel is just a jira ticket number
-        name_without_prefix = self._remove_prefix(channel_name)
-        self.logger.debug("%s -> %s" % (channel_name, name_without_prefix))
-
-        if name_without_prefix == jira_id:
+        self.logger.debug("%s -> %s" % (channel_name, channel_name_without_prefix))
+        if channel_name_without_prefix == jira_id:
             message = {
                 "fallback": "It's normally best to name a channel with more than just the JIRA issue number",
                 "color": random.choice(COLORS),
@@ -385,17 +398,15 @@ class Processor:
         Just for sanity, we limit the prefix and the issue number to 32 characters each.
 
         :param channel_name:
-        :return: The jira id related to the name or None
+        :return: Tuple with (The jira id related to the name or None, the channel name without prefix)
         """
-        name = self._remove_prefix(channel_name)
-        match = re.match("([A-Za-z][A-Za-z0-9_]{1,32}-[0-9]{1,32})", name)
-        return match.group(1) if match else None
-
-    def _remove_prefix(self, name):
-        for prefix in self.channel_prefixes:
-            if name.startswith(prefix):
-                return name[len(prefix):]
-        return name
+        for prefix in self.all_channel_prefixes:
+            if channel_name.startswith(prefix):
+                channel_name_without_prefix = channel_name[len(prefix):]
+                match = re.match("([A-Za-z][A-Za-z0-9_]{1,32}-[0-9]{1,32})", channel_name_without_prefix)
+                if match:
+                    return match.group(1), channel_name_without_prefix
+        return None, None
 
     def process_interactive_event(self, event_data):
         """

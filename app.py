@@ -12,6 +12,7 @@ import os
 import logging
 import random
 import redis
+import sys
 
 from flask import Flask, request, make_response
 from slackeventsapi import SlackEventAdapter
@@ -22,7 +23,7 @@ from slack_client_wrapper import SlackClientWrapper
 import clippy_messages
 
 APP_NAME = "ChannelTellTale"
-VERSION = "1.3.3 2021-Aug-13"  # Update this manually on each release
+VERSION = "1.4.0 2022-Jul-16"  # Update this manually on each release
 
 # Get environment settings 
 # getenv() is used for optional settings; os.environ[] is used for required settings
@@ -32,7 +33,7 @@ SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_VERIFICATION_TOKEN = os.environ["SLACK_VERIFICATION_TOKEN"]
 SLACK_SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"]
 TARGET_CHANNEL_ID = os.environ["TARGET_CHANNEL_ID"]
-CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "").split()  # whitespace separated list
+CHANNEL_PREFIXES = os.getenv("CHANNEL_PREFIXES", "")
 REDIS_URL = os.getenv("REDIS_URL")
 JIRA_URL = os.getenv("JIRA_URL")  # e.g. https://atlassian.mycompany.com
 FOMO_USERS = os.getenv("FOMO_USERS")  # "bug-im:fred.hole,joe.bloggs|approvals-:boss.man"
@@ -44,6 +45,7 @@ _logger = logging.getLogger(APP_NAME)
 
 # Log some settings
 _logger.info("STARTING %s (%s)", APP_NAME, VERSION)
+_logger.info("PYTHON VERSION: %s", sys.version_info)
 _logger.info("DEBUG: %s", DEBUG)
 _logger.info("PORT: %s", PORT)
 _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
@@ -53,12 +55,26 @@ _logger.info("JIRA_URL: %s", JIRA_URL)
 
 _logger.debug("*** This is a DEBUG build ***")
 
+# Load in any additional channel/prefix mappings
+additional_channels = {}
+for suffix in range(1, 10):
+    channel = os.getenv(f"TARGET_CHANNEL_ID_{suffix}")
+    if channel:
+        prefixes = os.getenv(f"CHANNEL_PREFIXES_{suffix}", "")
+        _logger.info(f"TARGET_CHANNEL_ID_%d: %s", suffix, channel)
+        _logger.info(f"CHANNEL_PREFIXES_%d: %s", suffix, prefixes)
+        additional_channels[channel] = prefixes.split()
+
 # Initialize our web server and slack interfaces
 app = Flask(__name__)
 slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", server=app)
 _redis = redis.from_url(REDIS_URL) if REDIS_URL else None
 _wrapper = SlackClientWrapper(WebClient(SLACK_BOT_TOKEN), _logger)
-_processor = Processor(TARGET_CHANNEL_ID, CHANNEL_PREFIXES, _wrapper, _redis, jira=JIRA_URL, fomo_users_as_string=FOMO_USERS)
+target_channel_to_prefixes_map = {
+    TARGET_CHANNEL_ID: CHANNEL_PREFIXES.split(),  # whitespace separated list
+    "jpp-notify-ttd-aws": ["jpp"],
+}.update(additional_channels)
+_processor = Processor(target_channel_to_prefixes_map, _wrapper, _redis, jira=JIRA_URL, fomo_users_as_string=FOMO_USERS)
 
 
 # -------------------------
