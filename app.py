@@ -23,7 +23,7 @@ from slack_client_wrapper import SlackClientWrapper
 import clippy_messages
 
 APP_NAME = "ChannelTellTale"
-VERSION = "1.4.0 2022-Jul-16"  # Update this manually on each release
+VERSION = "1.4.3 2022-Jul-16"  # Update this manually on each release
 
 # Get environment settings 
 # getenv() is used for optional settings; os.environ[] is used for required settings
@@ -45,7 +45,7 @@ _logger = logging.getLogger(APP_NAME)
 
 # Log some settings
 _logger.info("STARTING %s (%s)", APP_NAME, VERSION)
-_logger.info("PYTHON VERSION: %s", sys.version_info)
+_logger.info("PYTHON VERSION: %s", sys.version)
 _logger.info("DEBUG: %s", DEBUG)
 _logger.info("PORT: %s", PORT)
 _logger.info("CHANNEL_PREFIXES: %s", CHANNEL_PREFIXES)
@@ -73,7 +73,8 @@ _wrapper = SlackClientWrapper(WebClient(SLACK_BOT_TOKEN), _logger)
 target_channel_to_prefixes_map = {
     TARGET_CHANNEL_ID: CHANNEL_PREFIXES.split(),  # whitespace separated list
     "jpp-notify-ttd-aws": ["jpp"],
-}.update(additional_channels)
+}
+target_channel_to_prefixes_map.update(additional_channels)
 _processor = Processor(target_channel_to_prefixes_map, _wrapper, _redis, jira=JIRA_URL, fomo_users_as_string=FOMO_USERS)
 
 

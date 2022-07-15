@@ -79,7 +79,7 @@ Activate the virtual environment:
 To see the production logs:
 
     (venv) > zappa tail prod
-    (venv) > zappa tail prod --filter "?ERROR ?WARN ?INFO"
+    (venv) > zappa tail prod --filter "?ERROR ?WARN ?INFO" --since 1h
     
 To push a new version:
 

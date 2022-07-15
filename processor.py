@@ -28,6 +28,8 @@ KnownUser = namedtuple('KnownUser', ['display_name', 'user_id'])
 # If a rename happens outside of this period, we will announce the same channel a second time.
 CHANNEL_INFO_TTL_IN_SECONDS = 60 * (24 * 60 * 60)
 
+REDIS_KEY_USER_MAP = "map_user_name_to_id"
+USER_MAP_TTL_IN_SECONDS = 24 * 60 * 60
 
 class Processor:
     """
@@ -71,7 +73,7 @@ class Processor:
             return {}
 
         # Map all display names to user ids
-        map_name_to_id = {user.get("name"): user.get("id") for user in self._fetch_slack_users()}
+        map_name_to_id = self._fetch_slack_users()
 
         fomo_definitions = {}
         for channel_definition in fomo_users_as_string.split("|"):
@@ -84,13 +86,28 @@ class Processor:
 
     def _fetch_slack_users(self):
         """
-        Fetch the list of known users from slack.
+        Fetch a map of slack usernames to user ids
         """
-        # THINK - Fetching users takes about ~20 seconds. We could cache the result in redis and refetch it once/day
         start = time.time()
-        users = self.slack_client.users()
-        self.logger.info("loaded %d users from slack in %d seconds", len(users), int(time.time() - start))
-        return users
+
+        # Try to fetch cache value from redis
+        cached_map = self.redis_client.get(REDIS_KEY_USER_MAP)
+        if cached_map:
+            try:
+                user_map = json.loads(cached_map)
+                self.logger.info("loaded %d users from redis in %.2f seconds", len(user_map), time.time() - start)
+                return user_map
+            except:
+                self.logger.exception("failed to load user_map from redis", exc_info=True)
+
+        # The cache has failed us. Spend the time to fetch the list of users from slack
+        user_map = {user.get("name"): user.get("id") for user in self.slack_client.users()}
+        self.logger.info("loaded %d users from slack in %.2f seconds", len(user_map), time.time() - start)
+
+        # Cache the user map for 24 hours
+        self.redis_client.set(REDIS_KEY_USER_MAP, json.dumps(user_map))
+        self.redis_client.expire(REDIS_KEY_USER_MAP, USER_MAP_TTL_IN_SECONDS)
+        return user_map
 
     def _parse_one_fomo_channel(self, channel_definition, map_name_to_id):
         (channel_prefixes, users) = channel_definition.split(":")
